@@ -10,6 +10,10 @@ class MessageType {
   static const String answer = 'answer';
   static const String iceCandidate = 'ice-candidate';
   static const String ping = 'ping';
+  
+  /// E2EE Handshake messages (Client <-> Server)
+  static const String keyExchange = 'key-exchange';
+  static const String keyExchangeAck = 'key-exchange-ack';
 
   /// Server -> Client messages
   static const String welcome = 'welcome';
@@ -29,7 +33,7 @@ abstract class SignalingMessage {
   final int timestamp;
 
   /// Create a new signaling message
-  const SignalingMessage({
+  SignalingMessage({
     required this.type,
     int? timestamp,
   }) : timestamp = timestamp ?? DateTime.now().millisecondsSinceEpoch;
@@ -64,8 +68,12 @@ abstract class SignalingMessage {
         return ErrorMessage.fromJson(json);
       case MessageType.pong:
         return PongMessage.fromJson(json);
+      case MessageType.keyExchange:
+        return KeyExchangeMessage.fromJson(json);
+      case MessageType.keyExchangeAck:
+        return KeyExchangeAckMessage.fromJson(json);
       default:
-        return SignalingMessage(type: type, timestamp: json['timestamp'] as int?);
+        return _UnknownMessage(type: type, json: json);
     }
   }
 }
@@ -75,7 +83,7 @@ class WelcomeMessage extends SignalingMessage {
   /// Client ID assigned by server
   final String id;
 
-  const WelcomeMessage({
+  WelcomeMessage({
     required this.id,
   }) : super(type: MessageType.welcome);
 
@@ -102,7 +110,7 @@ class JoinedMessage extends SignalingMessage {
   /// Peer ID
   final String peerId;
 
-  const JoinedMessage({
+  JoinedMessage({
     required this.roomId,
     required this.peerId,
   }) : super(type: MessageType.joined);
@@ -129,7 +137,7 @@ class ReadyMessage extends SignalingMessage {
   /// Peer ID that is ready
   final String peerId;
 
-  const ReadyMessage({
+  ReadyMessage({
     required this.peerId,
   }) : super(type: MessageType.ready);
 
@@ -156,7 +164,7 @@ class OfferMessage extends SignalingMessage {
   /// SDP offer
   final Map<String, dynamic> sdp;
 
-  const OfferMessage({
+  OfferMessage({
     required this.peerId,
     required this.sdp,
   }) : super(type: MessageType.offer);
@@ -186,7 +194,7 @@ class AnswerMessage extends SignalingMessage {
   /// SDP answer
   final Map<String, dynamic> sdp;
 
-  const AnswerMessage({
+  AnswerMessage({
     required this.peerId,
     required this.sdp,
   }) : super(type: MessageType.answer);
@@ -216,7 +224,7 @@ class ICECandidateMessage extends SignalingMessage {
   /// ICE candidate
   final Map<String, dynamic> candidate;
 
-  const ICECandidateMessage({
+  ICECandidateMessage({
     required this.peerId,
     required this.candidate,
   }) : super(type: MessageType.iceCandidate);
@@ -246,7 +254,7 @@ class DisconnectMessage extends SignalingMessage {
   /// Room ID
   final String roomId;
 
-  const DisconnectMessage({
+  DisconnectMessage({
     required this.peerId,
     required this.roomId,
   }) : super(type: MessageType.disconnect);
@@ -273,7 +281,7 @@ class ErrorMessage extends SignalingMessage {
   /// Error message
   final String error;
 
-  const ErrorMessage({
+  ErrorMessage({
     required this.error,
   }) : super(type: MessageType.error);
 
@@ -294,10 +302,10 @@ class ErrorMessage extends SignalingMessage {
 
 /// Pong response
 class PongMessage extends SignalingMessage {
-  const PongMessage() : super(type: MessageType.pong);
+  PongMessage() : super(type: MessageType.pong);
 
   factory PongMessage.fromJson(Map<String, dynamic> json) {
-    return const PongMessage();
+    return PongMessage();
   }
 }
 
@@ -344,5 +352,100 @@ class LeaveRequest extends SignalingMessage {
 
 /// Ping request
 class PingRequest extends SignalingMessage {
-  const PingRequest() : super(type: MessageType.ping);
+  PingRequest() : super(type: MessageType.ping);
+}
+
+// ==================== E2EE Handshake Messages ====================
+
+/// Key exchange initiation message (Client -> Server -> Peer)
+/// 
+/// This message contains the client's public keys for establishing
+/// end-to-end encryption. Only public keys are transmitted; private
+/// keys NEVER leave the client device.
+class KeyExchangeMessage extends SignalingMessage {
+  /// Target peer ID
+  final String peerId;
+
+  /// Sender's Ed25519 signing public key (hex encoded)
+  final String signingPublicKey;
+
+  /// Sender's X25519 exchange public key (hex encoded)
+  final String exchangePublicKey;
+
+  /// Optional: Signed challenge for authentication
+  final String? signature;
+
+  KeyExchangeMessage({
+    required this.peerId,
+    required this.signingPublicKey,
+    required this.exchangePublicKey,
+    this.signature,
+  }) : super(type: MessageType.keyExchange);
+
+  factory KeyExchangeMessage.fromJson(Map<String, dynamic> json) {
+    return KeyExchangeMessage(
+      peerId: json['peer_id'] as String,
+      signingPublicKey: json['signing_public_key'] as String,
+      exchangePublicKey: json['exchange_public_key'] as String,
+      signature: json['signature'] as String?,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      ...super.toJson(),
+      'peer_id': peerId,
+      'signing_public_key': signingPublicKey,
+      'exchange_public_key': exchangePublicKey,
+      if (signature != null) 'signature': signature,
+    };
+  }
+}
+
+/// Key exchange acknowledgment (Server -> Client)
+/// 
+/// Confirms that the key exchange message was forwarded to the target peer.
+class KeyExchangeAckMessage extends SignalingMessage {
+  /// The peer ID that received the key exchange
+  final String peerId;
+
+  /// Status of the key exchange
+  final String status;
+
+  KeyExchangeAckMessage({
+    required this.peerId,
+    required this.status,
+  }) : super(type: MessageType.keyExchangeAck);
+
+  factory KeyExchangeAckMessage.fromJson(Map<String, dynamic> json) {
+    return KeyExchangeAckMessage(
+      peerId: json['peer_id'] as String,
+      status: json['status'] as String,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      ...super.toJson(),
+      'peer_id': peerId,
+      'status': status,
+    };
+  }
+}
+
+/// Catch-all for unknown or unrecognized message types
+class _UnknownMessage extends SignalingMessage {
+  /// The raw JSON data
+  final Map<String, dynamic> _json;
+
+  _UnknownMessage({
+    required String type,
+    required Map<String, dynamic> json,
+  })  : _json = json,
+        super(type: type, timestamp: json['timestamp'] as int?);
+
+  @override
+  Map<String, dynamic> toJson() => _json;
 }

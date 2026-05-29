@@ -110,6 +110,26 @@ Keep-alive ping message.
 }
 ```
 
+#### 7. Key Exchange (E2EE Handshake)
+Initiate end-to-end encryption key exchange with a peer. This message contains
+the sender's public keys for establishing E2EE. Only public keys are transmitted;
+private keys NEVER leave the client device.
+
+```json
+{
+  "type": "key-exchange",
+  "peer_id": "target-peer-id",
+  "signing_public_key": "a1b2c3d4e5f6...",
+  "exchange_public_key": "f6e5d4c3b2a1...",
+  "signature": "optional_signature_for_authentication"
+}
+```
+
+**Fields:**
+- `signing_public_key`: Ed25519 public key for signature verification (hex encoded, 64 chars)
+- `exchange_public_key`: X25519 public key for ECDH key exchange (hex encoded, 64 chars)
+- `signature`: Optional Ed25519 signature for authentication
+
 ### Server → Client Messages
 
 #### 1. Welcome

@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Codex SecureClinic - E2EE Telemedicine</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --primary: #0f172a;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --surface: #1e293b;
+            --surface-light: #334155;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #475569;
+            --encrypted-badge: #065f46;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--primary);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 320px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sidebar-header .e2ee-badge {
+            background: var(--encrypted-badge);
+            color: var(--success);
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .patient-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .patient-card {
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 4px;
+            transition: background 0.15s;
+        }
+
+        .patient-card:hover { background: var(--surface-light); }
+        .patient-card.active { background: var(--accent); }
+
+        .patient-name { font-weight: 600; font-size: 0.9rem; }
+        .patient-status { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+        .patient-status.online { color: var(--success); }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-area {
+            flex: 1;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .video-placeholder {
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .video-placeholder .icon { font-size: 4rem; margin-bottom: 12px; }
+
+        .encryption-overlay {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: var(--encrypted-badge);
+            color: var(--success);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .encryption-overlay .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .peer-info-overlay {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: rgba(0,0,0,0.6);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+        }
+
+        /* Chat Area */
+        .chat-panel {
+            height: 280px;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 16px;
+        }
+
+        .chat-msg {
+            margin-bottom: 12px;
+            max-width: 80%;
+        }
+
+        .chat-msg.sent { margin-left: auto; }
+        .chat-msg .bubble {
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .chat-msg.sent .bubble { background: var(--accent); border-bottom-right-radius: 4px; }
+        .chat-msg.received .bubble { background: var(--surface-light); border-bottom-left-radius: 4px; }
+
+        .chat-msg .meta {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .chat-msg .lock-icon { color: var(--success); }
+
+        .chat-input-area {
+            padding: 10px 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-input-area input {
+            flex: 1;
+            background: var(--surface-light);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: var(--text);
+            font-size: 0.85rem;
+        }
+
+        .chat-input-area button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .chat-input-area button:hover { background: var(--accent-hover); }
+
+        /* Controls Bar */
+        .controls-bar {
+            padding: 16px;
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .control-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+        }
+
+        .control-btn.active { background: var(--surface-light); color: var(--text); }
+        .control-btn.danger { background: var(--danger); color: white; }
+        .control-btn.danger:hover { background: #dc2626; }
+
+        /* Security Info Panel */
+        .security-panel {
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding: 12px 16px;
+        }
+
+        .security-info-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        .security-item {
+            font-size: 0.7rem;
+        }
+
+        .security-item .label { color: var(--text-muted); margin-bottom: 2px; }
+        .security-item .value { font-weight: 600; font-family: monospace; }
+        .security-item .value.green { color: var(--success); }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>
+                    🏥 SecureClinic
+                    <span class="e2ee-badge">🔒 E2EE</span>
+                </h1>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+                    Powered by Codex Fabric
+                </p>
+            </div>
+            <div class="patient-list">
+                <div class="patient-card active">
+                    <div class="patient-name">Dr. Sarah Chen</div>
+                    <div class="patient-status online">● Online - Consultation Room</div>
+                </div>
+                <div class="patient-card">
+                    <div class="patient-name">Dr. James Wilson</div>
+                    <div class="patient-status online">● Online</div>
+                </div>
+                <div class="patient-card">
+                    <div class="patient-name">Nurse Maria Garcia</div>
+                    <div class="patient-status">○ Offline</div>
+                </div>
+                <div class="patient-card">
+                    <div class="patient-name">Dr. Raj Patel</div>
+                    <div class="patient-status online">● Online</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="video-area">
+                <div class="encryption-overlay">
+                    <span class="dot"></span>
+                    E2EE ENCRYPTED · AES-256-GCM
+                </div>
+                <div class="peer-info-overlay">
+                    <div style="color: var(--success);">● Connected</div>
+                    <div style="margin-top: 4px;">Peer: dr-chen-001</div>
+                </div>
+                <div class="video-placeholder">
+                    <div class="icon">📹</div>
+                    <div>Secure Video Stream</div>
+                    <div style="font-size: 0.8rem; margin-top: 8px; color: var(--text-muted);">
+                        End-to-end encrypted · HIPAA compliant
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-panel">
+                <div class="chat-header">
+                    <span>💬 Encrypted Chat</span>
+                    <span style="color: var(--success); font-size: 0.75rem;">🔒 E2EE Active</span>
+                </div>
+                <div class="chat-messages" id="chatMessages">
+                    <div class="chat-msg received">
+                        <div class="bubble">Hi, I've uploaded the latest lab results for review.</div>
+                        <div class="meta">
+                            <span class="lock-icon">🔒</span>
+                            Dr. Chen · 2:14 PM · Encrypted
+                        </div>
+                    </div>
+                    <div class="chat-msg sent">
+                        <div class="bubble">Thanks! I can see them. The cholesterol levels look good.</div>
+                        <div class="meta">
+                            <span class="lock-icon">🔒</span>
+                            You · 2:15 PM · Encrypted
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="chatInput" placeholder="Type encrypted message..." />
+                    <button onclick="sendMessage()">Send</button>
+                </div>
+            </div>
+
+            <div class="security-panel">
+                <div class="security-info-grid">
+                    <div class="security-item">
+                        <div class="label">Encryption</div>
+                        <div class="value green">AES-256-GCM</div>
+                    </div>
+                    <div class="security-item">
+                        <div class="label">Key Exchange</div>
+                        <div class="value green">X25519 ECDH</div>
+                    </div>
+                    <div class="security-item">
+                        <div class="label">Signing</div>
+                        <div class="value green">Ed25519</div>
+                    </div>
+                    <div class="security-item">
+                        <div class="label">Data Sovereignty</div>
+                        <div class="value green">100% On-Premise</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls-bar">
+                <button class="control-btn active" title="Microphone">🎤</button>
+                <button class="control-btn active" title="Camera">📷</button>
+                <button class="control-btn active" title="Screen Share">🖥️</button>
+                <button class="control-btn active" title="Chat">💬</button>
+                <button class="control-btn danger" title="End Call">📞</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const messages = document.getElementById('chatMessages');
+            
+            if (!input.value.trim()) return;
+
+            const now = new Date();
+            const time = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'chat-msg sent';
+            msgDiv.innerHTML = `
+                <div class="bubble">${input.value}</div>
+                <div class="meta">
+                    <span class="lock-icon">🔒</span>
+                    You · ${time} · Encrypted
+                </div>
+            `;
+            messages.appendChild(msgDiv);
+            messages.scrollTop = messages.scrollHeight;
+            input.value = '';
+        }
+
+        document.getElementById('chatInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>

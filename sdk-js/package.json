@@ -1,0 +1,45 @@
+{
+  "name": "@codex-fabric/sdk",
+  "version": "0.1.0",
+  "description": "Self-hosted, zero-trust E2EE video and data streaming SDK for high-security enterprise environments",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "module": "dist/index.mjs",
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "eslint src/",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "e2ee",
+    "webrtc",
+    "encryption",
+    "zero-trust",
+    "enterprise",
+    "streaming",
+    "video",
+    "security"
+  ],
+  "author": "CODEX INC ENTERPRISE",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ejoyment/codex-fabric"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/jest": "^29.5.11",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.3.3",
+    "eslint": "^8.56.0"
+  },
+  "dependencies": {
+    "uuid": "^9.0.0"
+  }
+}

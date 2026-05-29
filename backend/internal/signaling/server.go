@@ -27,6 +27,10 @@ const (
 	MessageTypeLeave        MessageType = "leave"
 	MessageTypePing         MessageType = "ping"
 
+	// E2EE Handshake messages (Client <-> Server <-> Client)
+	MessageTypeKeyExchange    MessageType = "key-exchange"
+	MessageTypeKeyExchangeAck MessageType = "key-exchange-ack"
+
 	// Server -> Client messages
 	MessageTypeWelcome    MessageType = "welcome"
 	MessageTypeJoined     MessageType = "joined"
@@ -47,6 +51,12 @@ type Message struct {
 	Error     string          `json:"error,omitempty"`
 	Message   string          `json:"message,omitempty"`
 	Timestamp int64           `json:"timestamp"`
+
+	// E2EE Key Exchange fields
+	SigningPublicKey  string `json:"signing_public_key,omitempty"`
+	ExchangePublicKey string `json:"exchange_public_key,omitempty"`
+	Signature         string `json:"signature,omitempty"`
+	Status            string `json:"status,omitempty"`
 }
 
 // Client represents a connected WebSocket client
@@ -282,6 +292,10 @@ func (s *Server) handleMessage(client *Client, msg *Message) error {
 		return s.handleICECandidate(client, msg)
 	case MessageTypePing:
 		return s.handlePing(client, msg)
+	case MessageTypeKeyExchange:
+		return s.handleKeyExchange(client, msg)
+	case MessageTypeKeyExchangeAck:
+		return s.handleKeyExchangeAck(client, msg)
 	default:
 		return fmt.Errorf("unknown message type: %s", msg.Type)
 	}
@@ -427,6 +441,95 @@ func (s *Server) handlePing(client *Client, msg *Message) error {
 		Timestamp: time.Now().UnixNano(),
 	}
 	return client.Send(pongMsg)
+}
+
+// handleKeyExchange handles E2EE key exchange messages.
+// The server acts purely as a relay - it forwards the public keys to the
+// target peer WITHOUT ever seeing private keys or deriving session keys.
+// This is critical for maintaining zero-trust architecture.
+func (s *Server) handleKeyExchange(client *Client, msg *Message) error {
+	if msg.PeerID == "" {
+		return fmt.Errorf("peer_id is required for key exchange")
+	}
+
+	if msg.SigningPublicKey == "" || msg.ExchangePublicKey == "" {
+		return fmt.Errorf("signing_public_key and exchange_public_key are required")
+	}
+
+	s.logger.Info("Key exchange initiated",
+		zap.String("from_client", client.ID),
+		zap.String("to_peer", msg.PeerID))
+
+	// Find the target peer in the same room
+	if client.roomID == "" {
+		return fmt.Errorf("must join a room before key exchange")
+	}
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[client.roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("room not found")
+	}
+
+	// Forward the key exchange message to the target peer
+	// CRITICAL: The server only relays public keys. It never accesses
+	// private keys, cannot compute the ECDH shared secret, and therefore
+	// cannot derive session encryption keys.
+	if peer, ok := room[msg.PeerID]; ok {
+		keyExchangeMsg := Message{
+			Type:              MessageTypeKeyExchange,
+			PeerID:            client.ID,
+			SigningPublicKey:  msg.SigningPublicKey,
+			ExchangePublicKey: msg.ExchangePublicKey,
+			Signature:         msg.Signature,
+			Timestamp:         time.Now().UnixNano(),
+		}
+		return peer.Send(keyExchangeMsg)
+	}
+
+	return fmt.Errorf("peer not found in room")
+}
+
+// handleKeyExchangeAck handles E2EE key exchange acknowledgment messages.
+// The server relays the acknowledgment back to the initiating peer to
+// confirm the key exchange was processed.
+func (s *Server) handleKeyExchangeAck(client *Client, msg *Message) error {
+	if msg.PeerID == "" {
+		return fmt.Errorf("peer_id is required for key exchange ack")
+	}
+
+	s.logger.Info("Key exchange acknowledgment",
+		zap.String("from_client", client.ID),
+		zap.String("to_peer", msg.PeerID),
+		zap.String("status", msg.Status))
+
+	// Find the target peer in the same room
+	if client.roomID == "" {
+		return fmt.Errorf("must join a room before key exchange ack")
+	}
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[client.roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("room not found")
+	}
+
+	// Forward the acknowledgment to the initiating peer
+	if peer, ok := room[msg.PeerID]; ok {
+		ackMsg := Message{
+			Type:      MessageTypeKeyExchangeAck,
+			PeerID:    client.ID,
+			Status:    msg.Status,
+			Timestamp: time.Now().UnixNano(),
+		}
+		return peer.Send(ackMsg)
+	}
+
+	return fmt.Errorf("peer not found in room")
 }
 
 // broadcastToRoom sends a message to all clients in a room except the sender
