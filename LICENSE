@@ -1,0 +1,114 @@
+CODEX FABRIC END USER LICENSE AGREEMENT (EULA)
+
+IMPORTANT - READ CAREFULLY: This is a legally binding agreement between you (either an individual or a single entity) and CODEX Inc. ("CODEX") for the CODEX Fabric software, which includes computer software, associated media, printed materials, and any "online" or electronic documentation ("SOFTWARE").
+
+By installing, copying, or otherwise using the SOFTWARE, you agree to be bound by the terms of this EULA. If you do not agree to the terms of this EULA, do not install or use the SOFTWARE.
+
+1. LICENSE GRANT
+
+Subject to the terms and conditions of this EULA and payment of applicable fees, CODEX grants you the following non-exclusive, non-transferable, non-sublicensable license:
+
+a) Growth Tier License:
+   - Use the SOFTWARE for up to 500 concurrent active streams
+   - Deploy on public cloud infrastructure only
+   - Access to standard support during business hours
+   - Use for internal business purposes only
+
+b) Enterprise Tier License:
+   - Unlimited concurrent streams as specified in your order form
+   - Deploy on public cloud, on-premise, or air-gapped environments
+   - Access to 24/7 dedicated support
+   - Use for internal business purposes and commercial applications
+   - White-labeling rights as specified in your order form
+
+2. RESTRICTIONS
+
+You may NOT:
+- Reverse engineer, decompile, or disassemble the SOFTWARE
+- Remove any proprietary notices or labels on the SOFTWARE
+- Use the SOFTWARE for illegal or unauthorized purposes
+- Rent, lease, or lend the SOFTWARE to third parties
+- Use the SOFTWARE to build a competitive product
+- Exceed the scope of your licensed tier without upgrading
+
+3. INTELLECTUAL PROPERTY
+
+The SOFTWARE is licensed, not sold. CODEX retains all rights, title, and interest in and to the SOFTWARE, including all intellectual property rights. You acquire no rights to the SOFTWARE except as expressly provided in this EULA.
+
+4. CONFIDENTIALITY
+
+You acknowledge that the SOFTWARE contains proprietary and confidential information of CODEX. You agree to:
+- Maintain the confidentiality of the SOFTWARE
+- Use reasonable precautions to protect the SOFTWARE from unauthorized use
+- Not disclose the SOFTWARE to any third party without prior written consent
+
+5. SUPPORT AND MAINTENANCE
+
+Support services are provided according to your license tier:
+- Growth Tier: Standard business hours support via email
+- Enterprise Tier: 24/7 dedicated support with 15-minute SLA for critical issues
+
+CODEX reserves the right to modify support terms with 30-day notice.
+
+6. UPDATES AND UPGRADES
+
+CODEX may provide updates and upgrades to the SOFTWARE. You agree to install critical security updates within 30 days of release. Failure to do so may result in termination of your license.
+
+7. TERMINATION
+
+This EULA is effective until terminated. CODEX may terminate this EULA immediately if you fail to comply with any term. Upon termination, you must:
+- Cease all use of the SOFTWARE
+- Destroy or return all copies of the SOFTWARE
+- Provide written certification of compliance
+
+8. WARRANTY DISCLAIMER
+
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NONINFRINGEMENT. CODEX DOES NOT WARRANT THAT THE SOFTWARE WILL BE UNINTERRUPTED OR ERROR-FREE.
+
+9. LIMITATION OF LIABILITY
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, CODEX SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, REVENUES, DATA, OR DATA USE, ARISING OUT OF OR RELATED TO THE SOFTWARE.
+
+CODEX'S TOTAL LIABILITY SHALL NOT EXCEED THE AMOUNT PAID BY YOU FOR THE SOFTWARE IN THE 12 MONTHS PRECEDING THE CLAIM.
+
+10. COMPLIANCE
+
+You agree to use the SOFTWARE in compliance with all applicable laws and regulations, including but not limited to:
+- Export control laws
+- Data protection regulations (GDPR, CCPA, etc.)
+- Industry-specific regulations (HIPAA, PCI DSS, etc.)
+
+11. AUDIT RIGHTS
+
+CODEX reserves the right to audit your use of the SOFTWARE to ensure compliance with this EULA. Such audits shall be conducted with reasonable notice and during normal business hours.
+
+12. GOVERNING LAW
+
+This EULA shall be governed by and construed in accordance with the laws of the State of California, without regard to its conflict of law provisions.
+
+13. DISPUTE RESOLUTION
+
+Any disputes arising from this EULA shall be resolved through binding arbitration in San Francisco, California, in accordance with the rules of the American Arbitration Association.
+
+14. ENTIRE AGREEMENT
+
+This EULA constitutes the entire agreement between you and CODEX regarding the SOFTWARE and supersedes all prior or contemporaneous agreements, representations, or warranties.
+
+15. SEVERABILITY
+
+If any provision of this EULA is found to be unenforceable, the remaining provisions shall continue in full force and effect.
+
+16. CONTACT INFORMATION
+
+For questions about this EULA or to report license violations, contact:
+
+CODEX Inc.
+Legal Department
+Email: legal@codex.inc
+Address: 123 Innovation Drive, San Francisco, CA 94105
+
+---
+
+By using CODEX Fabric, you acknowledge that you have read this EULA, understand it, and agree to be bound by its terms and conditions.
+
+© 2024 CODEX Inc. All rights reserved.

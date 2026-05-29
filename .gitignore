@@ -1,0 +1,85 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Dependency directories
+vendor/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build directories
+build/
+dist/
+bin/
+
+# Log files
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+
+# Flutter/Dart
+.dart_tool/
+.packages
+build/
+pubspec.lock
+
+# Flutter specific
+flutter_*.lock
+
+# Generated files
+*.g.dart
+*.freezed.dart
+
+# Coverage
+coverage/
+lcov.info
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# Kubernetes secrets
+*-secret.yaml
+*-secrets.yaml
+
+# Certificates
+*.pem
+*.key
+*.crt
+*.cert
+
+# Docker
+docker-compose.override.yml
+
+# Analysis
+.dart_tool/
