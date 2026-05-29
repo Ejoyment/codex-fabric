@@ -324,22 +324,17 @@ func TestServer_ICECandidateExchange(t *testing.T) {
 	readMessage(t, messages1, 5*time.Second)
 	readMessage(t, messages2, 5*time.Second)
 
-	// Join room
+	// Join room (sequenced to avoid race conditions with ready notifications)
 	joinMsg1 := Message{Type: MessageTypeJoin, RoomID: "test-room", PeerID: "peer-1"}
-	joinMsg2 := Message{Type: MessageTypeJoin, RoomID: "test-room", PeerID: "peer-2"}
-
 	conn1.WriteJSON(joinMsg1)
-	conn2.WriteJSON(joinMsg2)
+	readMessage(t, messages1, 5*time.Second) // joined
 
-	// Read joined messages
-	readMessage(t, messages1, 5*time.Second)
-	readMessage(t, messages2, 5*time.Second)
+	joinMsg2 := Message{Type: MessageTypeJoin, RoomID: "test-room", PeerID: "peer-2"}
+	conn2.WriteJSON(joinMsg2)
+	readMessage(t, messages2, 5*time.Second) // joined
 
 	// Peer 1 receives ready notification for peer 2
 	readMessage(t, messages1, 5*time.Second)
-
-	// Peer 2 also receives ready notification for peer 1 (drain it)
-	readMessage(t, messages2, 5*time.Second)
 
 	// Send ICE candidate from peer 1 to peer 2
 	candidate := json.RawMessage(`{"candidate":"mock-candidate","sdpMid":"0","sdpMLineIndex":0}`)
@@ -405,22 +400,17 @@ func TestServer_Disconnect(t *testing.T) {
 	readMessage(t, messages1, 5*time.Second)
 	readMessage(t, messages2, 5*time.Second)
 
-	// Join room
+	// Join room (sequenced)
 	joinMsg1 := Message{Type: MessageTypeJoin, RoomID: "test-room", PeerID: "peer-1"}
-	joinMsg2 := Message{Type: MessageTypeJoin, RoomID: "test-room", PeerID: "peer-2"}
-
 	conn1.WriteJSON(joinMsg1)
+	readMessage(t, messages1, 5*time.Second) // joined
+
+	joinMsg2 := Message{Type: MessageTypeJoin, RoomID: "test-room", PeerID: "peer-2"}
 	conn2.WriteJSON(joinMsg2)
+	readMessage(t, messages2, 5*time.Second) // joined
 
-	// Read joined messages
+	// Peer 1 receives ready notification for peer 2
 	readMessage(t, messages1, 5*time.Second)
-	readMessage(t, messages2, 5*time.Second)
-
-	// Peer 1 receives ready notification
-	readMessage(t, messages1, 5*time.Second)
-
-	// Peer 2 also receives ready notification for peer 1 (drain it)
-	readMessage(t, messages2, 5*time.Second)
 
 	// Close conn2
 	conn2.Close()
