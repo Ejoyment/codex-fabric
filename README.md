@@ -54,22 +54,35 @@ CODEX FABRIC allows enterprises to host their own zero-trust streaming infrastru
 
 ```
 codex-fabric/
-├── backend/              # Go signaling server
-│   ├── cmd/              # Application entry points
-│   ├── internal/         # Private application code
-│   ├── pkg/              # Public library code
-│   └── configs/          # Configuration files
-├── sdk/                  # Flutter/Dart SDK
-│   ├── lib/              # SDK source code
-│   ├── example/          # Example implementation
-│   └── test/             # SDK tests
-├── deploy/               # Deployment configurations
-│   ├── docker/           # Docker configurations
-│   ├── kubernetes/       # K8s manifests
-│   └── terraform/        # Infrastructure as Code
-├── scripts/              # Build and utility scripts
-├── docs/                 # Documentation
-└── tools/                # Development and testing tools
+├── backend/                    # Go signaling server
+│   ├── cmd/server/             # Application entry point
+│   ├── internal/signaling/     # WebSocket signaling + E2EE relay
+│   ├── internal/webrtc/        # WebRTC connection management
+│   ├── internal/auth/          # JWT authentication
+│   ├── pkg/crypto/             # Server-side crypto (AES-GCM, Ed25519, X25519, HKDF)
+│   └── config.yaml             # Server configuration
+├── sdk/                        # Flutter/Dart SDK (iOS, Android, Web, Desktop)
+│   ├── lib/src/crypto/         # E2EE key management + handshake
+│   ├── lib/src/signaling/      # WebSocket signaling client
+│   ├── lib/src/webrtc/         # WebRTC peer connections
+│   └── test/crypto/            # E2EE integration tests
+├── sdk-js/                     # JavaScript/TypeScript SDK (React, React Native, Node.js)
+│   └── src/                    # Crypto, signaling, and handshake modules
+├── poc-app/                    # White-labeled telemedicine demo app
+├── tests/
+│   ├── load/                   # Python load testing suite
+│   └── security/               # Security audit / penetration tests
+├── docs/                       # Documentation
+│   ├── QUICKSTART.md           # < 30 min integration guide
+│   ├── API_REFERENCE.md        # Flutter + JS + Go API docs
+│   ├── DEPLOYMENT.md           # Docker + air-gapped deployment
+│   ├── E2EE_SECURITY_ARCHITECTURE.md
+│   ├── SIGNALING_PROTOCOL.md
+│   ├── BETA_TESTING_GUIDE.md
+│   ├── GOLIVE_CHECKLIST.md
+│   ├── SALES_OUTREACH_TEMPLATES.md
+│   └── RELEASE_NOTES.md
+└── .github/workflows/ci.yml   # CI/CD pipeline
 ```
 
 ## Quick Start
@@ -91,7 +104,7 @@ go run cmd/server/main.go
 
 ### Integrating the SDK
 
-Add to your Flutter project's `pubspec.yaml`:
+**Flutter/Dart** — Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
@@ -101,23 +114,27 @@ dependencies:
       path: sdk
 ```
 
-Then in your Dart code:
-
 ```dart
 import 'package:codex_fabric/codex_fabric.dart';
 
-// Initialize with your server endpoint
-final fabric = CodexFabric(
-  endpoint: 'wss://your-server.com',
-  config: FabricConfig(
-    enableE2EE: true,
-    iceServers: [...],
-  ),
-);
-
-// Connect and start secure streaming
-await fabric.connect();
+final handshake = SecurityHandshake(keyManager: KeyManager());
+await handshake.initialize();
+await handshake.initiateKeyExchange('peer-id');
 ```
+
+**JavaScript/TypeScript** — `npm install @codex-fabric/sdk`:
+
+```typescript
+import { KeyManager, SecurityHandshake, SignalingClient } from '@codex-fabric/sdk';
+
+const km = new KeyManager();
+const signaling = new SignalingClient({ url: 'wss://your-server.com', roomId: 'room-1' });
+const handshake = new SecurityHandshake(km, signaling);
+await handshake.initialize();
+handshake.initiateKeyExchange('peer-id');
+```
+
+See [Quick Start Guide](docs/QUICKSTART.md) for the full 30-minute walkthrough.
 
 ## Security
 
@@ -133,11 +150,16 @@ See [SECURITY.md](SECURITY.md) for detailed security documentation.
 
 ## Documentation
 
-- [Getting Started Guide](docs/getting-started.md)
-- [API Reference](docs/api-reference.md)
-- [Security Architecture](docs/security.md)
-- [Deployment Guide](docs/deployment.md)
-- [Integration Examples](docs/examples.md)
+- [Quick Start Guide](docs/QUICKSTART.md) — < 30 minute integration
+- [API Reference](docs/API_REFERENCE.md) — Flutter + JS + Go
+- [E2EE Security Architecture](docs/E2EE_SECURITY_ARCHITECTURE.md)
+- [Signaling Protocol](docs/SIGNALING_PROTOCOL.md)
+- [Deployment Guide](docs/DEPLOYMENT.md) — Docker, air-gapped, systemd
+- [Security Audit](docs/SECURITY.md) — Penetration test results
+- [Beta Testing Guide](docs/BETA_TESTING_GUIDE.md)
+- [Go-Live Checklist](docs/GOLIVE_CHECKLIST.md)
+- [Sales Outreach Templates](docs/SALES_OUTREACH_TEMPLATES.md)
+- [Release Notes](docs/RELEASE_NOTES.md)
 
 ## Pricing & Licensing
 
@@ -177,4 +199,6 @@ Proprietary enterprise software. See [LICENSE](LICENSE) for terms.
 
 ---
 
-© 2024 CODEX Inc. All rights reserved. CODEX FABRIC is a trademark of CODEX Inc.
+**v0.1.0 "First Handshake"** — 12-week MVP complete. See [Release Notes](docs/RELEASE_NOTES.md).
+
+© 2024 CODEX INC ENTERPRISE. All rights reserved. CODEX FABRIC is a trademark of CODEX Inc.
