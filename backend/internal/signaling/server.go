@@ -20,15 +20,15 @@ type MessageType string
 
 const (
 	// Client -> Server messages
-	MessageTypeOffer     MessageType = "offer"
-	MessageTypeAnswer    MessageType = "answer"
+	MessageTypeOffer        MessageType = "offer"
+	MessageTypeAnswer       MessageType = "answer"
 	MessageTypeICECandidate MessageType = "ice-candidate"
-	MessageTypeJoin      MessageType = "join"
-	MessageTypeLeave     MessageType = "leave"
-	MessageTypePing      MessageType = "ping"
+	MessageTypeJoin         MessageType = "join"
+	MessageTypeLeave        MessageType = "leave"
+	MessageTypePing         MessageType = "ping"
 
 	// Server -> Client messages
-	MessageTypeWelcome   MessageType = "welcome"
+	MessageTypeWelcome    MessageType = "welcome"
 	MessageTypeJoined     MessageType = "joined"
 	MessageTypeReady      MessageType = "ready"
 	MessageTypePong       MessageType = "pong"
@@ -51,29 +51,29 @@ type Message struct {
 
 // Client represents a connected WebSocket client
 type Client struct {
-	ID        string
-	conn      *websocket.Conn
-	server    *Server
-	roomID    string
-	peerID    string
-	send      chan []byte
+	ID            string
+	conn          *websocket.Conn
+	server        *Server
+	roomID        string
+	peerID        string
+	send          chan []byte
 	authenticated bool
-	lastActivity time.Time
-	mu        sync.RWMutex
+	lastActivity  time.Time
+	mu            sync.RWMutex
 }
 
 // Server manages WebSocket connections and signaling
 type Server struct {
-	config      config.SignalingConfig
-	webrtcMgr   *webrtc.Manager
-	logger      *zap.Logger
-	upgrader    websocket.Upgrader
-	clients     map[string]*Client
-	rooms       map[string]map[string]*Client
-	clientsMu   sync.RWMutex
-	roomsMu     sync.RWMutex
-	connCount   int64
-	hub         *Hub
+	config    config.SignalingConfig
+	webrtcMgr *webrtc.Manager
+	logger    *zap.Logger
+	upgrader  websocket.Upgrader
+	clients   map[string]*Client
+	rooms     map[string]map[string]*Client
+	clientsMu sync.RWMutex
+	roomsMu   sync.RWMutex
+	connCount int64
+	hub       *Hub
 }
 
 // Hub manages message broadcasting within rooms
@@ -105,6 +105,10 @@ func NewServer(cfg config.SignalingConfig, webrtcMgr *webrtc.Manager, logger *za
 				if len(allowedOrigins) == 0 {
 					return true // Allow all origins if not configured
 				}
+				// Allow wildcard
+				if allowedOrigins["*"] {
+					return true
+				}
 				return allowedOrigins[r.Header.Get("Origin")]
 			},
 			EnableCompression: cfg.EnableCompression,
@@ -132,11 +136,11 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Create new client
 	client := &Client{
-		ID:             uuid.New().String(),
-		conn:           conn,
-		server:         s,
-		send:           make(chan []byte, 256),
-		lastActivity:   time.Now(),
+		ID:           uuid.New().String(),
+		conn:         conn,
+		server:       s,
+		send:         make(chan []byte, 256),
+		lastActivity: time.Now(),
 	}
 
 	// Register client

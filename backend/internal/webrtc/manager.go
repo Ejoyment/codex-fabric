@@ -6,69 +6,49 @@ import (
 	"time"
 
 	"github.com/Ejoyment/codex-fabric/backend/internal/config"
-	"github.com/pion/ice/v2"
 	"github.com/pion/webrtc/v3"
 	"go.uber.org/zap"
 )
 
 // Manager handles WebRTC peer connections and media routing
 type Manager struct {
-	config      config.WebRTCConfig
-	logger      *zap.Logger
-	api         *webrtc.API
-	mediaEngine *webrtc.MediaEngine
-	settings    *webrtc.SettingEngine
-	connections map[string]*webrtc.PeerConnection
-	connsMu     sync.RWMutex
-	closed      bool
+	config           config.WebRTCConfig
+	logger           *zap.Logger
+	api              *webrtc.API
+	mediaEngine      *webrtc.MediaEngine
+	connections      map[string]*webrtc.PeerConnection
+	connsMu          sync.RWMutex
+	closed           bool
+	natTraversal     *NATTraversalManager
+	natTraversalOnce sync.Once
 }
 
 // PeerConnection wraps a WebRTC peer connection with metadata
 type PeerConnection struct {
-	Connection *webrtc.PeerConnection
-	PeerID     string
-	RoomID     string
-	OfferSDP   *webrtc.SessionDescription
-	AnswerSDP  *webrtc.SessionDescription
-	CreatedAt  time.Time
+	Connection   *webrtc.PeerConnection
+	PeerID       string
+	RoomID       string
+	OfferSDP     *webrtc.SessionDescription
+	AnswerSDP    *webrtc.SessionDescription
+	CreatedAt    time.Time
 	LastActivity time.Time
-	DataChannel *webrtc.DataChannel
-	mu          sync.RWMutex
+	DataChannel  *webrtc.DataChannel
+	mu           sync.RWMutex
 }
 
 // NewManager creates a new WebRTC manager
 func NewManager(cfg config.WebRTCConfig, logger *zap.Logger) (*Manager, error) {
-	// Create a setting engine for advanced configuration
-	settingEngine := &webrtc.SettingEngine{}
-	
-	// Configure NAT traversal
-	settingEngine.SetICETimeout(cfg.ConnectionTimeout)
-	settingEngine.SetIncludeLoopbackCandidate(false)
-	settingEngine.SetNet(nil) // Use default network
-
-	// Configure ICE servers
-	iceServers := make([]webrtc.ICEServer, 0)
-	for _, server := range cfg.GetICEServers() {
-		iceServers = append(iceServers, webrtc.ICEServer{
-			URLs:       server.URLs,
-			Username:   server.Username,
-			Credential: server.Credential,
-		})
-	}
-	settingEngine.SetICEServers(iceServers)
-
 	// Create media engine
 	mediaEngine := &webrtc.MediaEngine{}
-	
+
 	// Register video codecs
 	if err := mediaEngine.RegisterDefaultCodecs(); err != nil {
 		return nil, fmt.Errorf("failed to register codecs: %w", err)
 	}
 
-	// Create API with custom settings
+	// Create API with media engine
 	api := webrtc.NewAPI(
 		webrtc.WithMediaEngine(mediaEngine),
-		webrtc.WithSettingEngine(*settingEngine),
 	)
 
 	m := &Manager{
@@ -76,24 +56,14 @@ func NewManager(cfg config.WebRTCConfig, logger *zap.Logger) (*Manager, error) {
 		logger:      logger,
 		api:         api,
 		mediaEngine: mediaEngine,
-		settings:    settingEngine,
 		connections: make(map[string]*webrtc.PeerConnection),
 	}
 
 	return m, nil
 }
 
-// CreatePeerConnection creates a new WebRTC peer connection
-func (m *Manager) CreatePeerConnection(peerID, roomID string) (*PeerConnection, error) {
-	if m.closed {
-		return nil, fmt.Errorf("manager is closed")
-	}
-
-	// Configure ICE candidate gathering
-	settingEngine := &webrtc.SettingEngine{}
-	settingEngine.SetICETimeout(m.config.ConnectionTimeout)
-	
-	// Set up ICE servers
+// getICEServers converts config ICE servers to webrtc.ICEServer format
+func (m *Manager) getICEServers() []webrtc.ICEServer {
 	iceServers := make([]webrtc.ICEServer, 0)
 	for _, server := range m.config.GetICEServers() {
 		iceServers = append(iceServers, webrtc.ICEServer{
@@ -102,16 +72,20 @@ func (m *Manager) CreatePeerConnection(peerID, roomID string) (*PeerConnection, 
 			Credential: server.Credential,
 		})
 	}
-	settingEngine.SetICEServers(iceServers)
+	return iceServers
+}
 
-	// Create new API instance for this connection
-	api := webrtc.NewAPI(
-		webrtc.WithMediaEngine(m.mediaEngine),
-		webrtc.WithSettingEngine(*settingEngine),
-	)
+// CreatePeerConnection creates a new WebRTC peer connection
+func (m *Manager) CreatePeerConnection(peerID, roomID string) (*PeerConnection, error) {
+	if m.closed {
+		return nil, fmt.Errorf("manager is closed")
+	}
 
-	// Create peer connection
-	pc, err := api.NewPeerConnection(webrtc.Configuration{
+	// Get ICE servers from configuration
+	iceServers := m.getICEServers()
+
+	// Create peer connection with ICE servers
+	pc, err := m.api.NewPeerConnection(webrtc.Configuration{
 		ICEServers: iceServers,
 	})
 	if err != nil {
@@ -151,15 +125,15 @@ func (m *Manager) CreatePeerConnection(peerID, roomID string) (*PeerConnection, 
 		}
 	})
 
-	pc.OnICECandidate(func(candidate *ice.Candidate) {
+	pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		if candidate != nil {
 			m.logger.Debug("ICE candidate gathered",
 				zap.String("peer_id", peerID),
-				zap.String("candidate", candidate.String()))
+				zap.String("candidate", candidate.ToJSON().Candidate))
 		}
 	})
 
-	pc.OnICEConnectionStateChange(func(state ice.ConnectionState) {
+	pc.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
 		m.logger.Debug("ICE connection state changed",
 			zap.String("peer_id", peerID),
 			zap.String("state", state.String()))
@@ -172,7 +146,7 @@ func (m *Manager) CreatePeerConnection(peerID, roomID string) (*PeerConnection, 
 			m.logger.Warn("Failed to create data channel", zap.Error(err))
 		} else {
 			wrappedConn.DataChannel = dataChannel
-			
+
 			dataChannel.OnOpen(func() {
 				m.logger.Info("Data channel opened",
 					zap.String("peer_id", peerID),
@@ -305,10 +279,10 @@ func (m *Manager) GetConnectionStats() map[string]interface{} {
 
 	for peerID, conn := range m.connections {
 		connStats := map[string]interface{}{
-			"peer_id":        peerID,
+			"peer_id":          peerID,
 			"connection_state": conn.ConnectionState().String(),
-			"ice_state":      conn.ICEConnectionState().String(),
-			"signaling_state": conn.SignalingState().String(),
+			"ice_state":        conn.ICEConnectionState().String(),
+			"signaling_state":  conn.SignalingState().String(),
 		}
 		stats["connections"] = append(stats["connections"].([]map[string]interface{}), connStats)
 	}
@@ -346,24 +320,10 @@ func (m *Manager) GetActiveConnectionCount() int {
 	return len(m.connections)
 }
 
-// CleanupStaleConnections removes connections that haven't been active recently
-func (m *Manager) CleanupStaleConnections(timeout time.Duration) int {
-	m.connsMu.Lock()
-	defer m.connsMu.Unlock()
-
-	cleaned := 0
-	now := time.Now()
-
-	for peerID, conn := range m.connections {
-		// This is a simplified check - in reality we'd need to track last activity
-		// in the PeerConnection wrapper
-		if now.Sub(conn.ConnectionState().String() /* placeholder */ ) > timeout {
-			if err := conn.Close(); err == nil {
-				delete(m.connections, peerID)
-				cleaned++
-			}
-		}
-	}
-
-	return cleaned
+// GetNATTraversalManager returns the NAT traversal manager (lazy initialization)
+func (m *Manager) GetNATTraversalManager() *NATTraversalManager {
+	m.natTraversalOnce.Do(func() {
+		m.natTraversal = NewNATTraversalManager(m.config, m.logger)
+	})
+	return m.natTraversal
 }
