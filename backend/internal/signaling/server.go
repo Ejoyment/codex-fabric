@@ -314,7 +314,11 @@ func (s *Server) handleJoin(client *Client, msg *Message) error {
 	if _, exists := s.rooms[msg.RoomID]; !exists {
 		s.rooms[msg.RoomID] = make(map[string]*Client)
 	}
+	// Store by both client.ID (UUID) and peer_id for flexible lookup
 	s.rooms[msg.RoomID][client.ID] = client
+	if msg.PeerID != "" {
+		s.rooms[msg.RoomID][msg.PeerID] = client
+	}
 	s.roomsMu.Unlock()
 
 	s.logger.Info("Client joined room",
@@ -368,7 +372,7 @@ func (s *Server) handleOffer(client *Client, msg *Message) error {
 	if peer, ok := room[msg.PeerID]; ok {
 		offerMsg := Message{
 			Type:      MessageTypeOffer,
-			PeerID:    client.ID,
+			PeerID:    client.peerID,
 			SDP:       msg.SDP,
 			Timestamp: time.Now().UnixNano(),
 		}
@@ -396,7 +400,7 @@ func (s *Server) handleAnswer(client *Client, msg *Message) error {
 	if peer, ok := room[msg.PeerID]; ok {
 		answerMsg := Message{
 			Type:      MessageTypeAnswer,
-			PeerID:    client.ID,
+			PeerID:    client.peerID,
 			SDP:       msg.SDP,
 			Timestamp: time.Now().UnixNano(),
 		}
@@ -424,7 +428,7 @@ func (s *Server) handleICECandidate(client *Client, msg *Message) error {
 	if peer, ok := room[msg.PeerID]; ok {
 		iceMsg := Message{
 			Type:      MessageTypeICECandidate,
-			PeerID:    client.ID,
+			PeerID:    client.peerID,
 			Candidate: msg.Candidate,
 			Timestamp: time.Now().UnixNano(),
 		}
@@ -480,7 +484,7 @@ func (s *Server) handleKeyExchange(client *Client, msg *Message) error {
 	if peer, ok := room[msg.PeerID]; ok {
 		keyExchangeMsg := Message{
 			Type:              MessageTypeKeyExchange,
-			PeerID:            client.ID,
+			PeerID:            client.peerID,
 			SigningPublicKey:  msg.SigningPublicKey,
 			ExchangePublicKey: msg.ExchangePublicKey,
 			Signature:         msg.Signature,
@@ -522,7 +526,7 @@ func (s *Server) handleKeyExchangeAck(client *Client, msg *Message) error {
 	if peer, ok := room[msg.PeerID]; ok {
 		ackMsg := Message{
 			Type:      MessageTypeKeyExchangeAck,
-			PeerID:    client.ID,
+			PeerID:    client.peerID,
 			Status:    msg.Status,
 			Timestamp: time.Now().UnixNano(),
 		}
@@ -532,27 +536,49 @@ func (s *Server) handleKeyExchangeAck(client *Client, msg *Message) error {
 	return fmt.Errorf("peer not found in room")
 }
 
-// broadcastToRoom sends a message to all clients in a room except the sender
+// broadcastToRoom sends a message to all clients in a room except the sender.
+// Uses pointer comparison to avoid duplicate sends when clients are stored
+// under multiple keys (both UUID and peer_id).
 func (s *Server) broadcastToRoom(roomID string, msg Message, excludeClientID string) {
 	s.roomsMu.RLock()
 	room, exists := s.rooms[roomID]
-	s.roomsMu.RUnlock()
-
 	if !exists {
+		s.roomsMu.RUnlock()
 		return
 	}
 
-	for id, client := range room {
-		if id != excludeClientID {
-			client.Send(msg)
+	// Find the excluded client pointer
+	var excludeClient *Client
+	if c, ok := room[excludeClientID]; ok {
+		excludeClient = c
+	}
+
+	// Collect unique clients to send to (avoid duplicate sends)
+	var targets []*Client
+	sent := make(map[*Client]bool)
+	for _, client := range room {
+		if client == excludeClient || sent[client] {
+			continue
 		}
+		sent[client] = true
+		targets = append(targets, client)
+	}
+	s.roomsMu.RUnlock()
+
+	// Send outside the lock to avoid holding it during I/O
+	for _, client := range targets {
+		client.Send(msg)
 	}
 }
 
-// removeFromRoom removes a client from a room
+// removeFromRoom removes a client from a room (by both UUID and peer_id keys)
 func (s *Server) removeFromRoom(roomID, clientID string) {
 	s.roomsMu.Lock()
 	if room, exists := s.rooms[roomID]; exists {
+		// Also remove by peer_id if found
+		if client, ok := room[clientID]; ok && client.peerID != "" {
+			delete(room, client.peerID)
+		}
 		delete(room, clientID)
 		if len(room) == 0 {
 			delete(s.rooms, roomID)
