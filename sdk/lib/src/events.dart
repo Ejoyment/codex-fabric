@@ -9,7 +9,7 @@ abstract class FabricEvent {
   final DateTime timestamp;
 
   /// Create a new event
-  const FabricEvent({
+  FabricEvent({
     required this.type,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
@@ -26,7 +26,7 @@ class ConnectionStateEvent extends FabricEvent {
   /// Error message if state is error
   final String? error;
 
-  const ConnectionStateEvent({
+  ConnectionStateEvent({
     required this.previousState,
     required this.currentState,
     this.error,
@@ -38,7 +38,7 @@ class PeerConnectedEvent extends FabricEvent {
   /// Peer information
   final Participant peer;
 
-  const PeerConnectedEvent({
+  PeerConnectedEvent({
     required this.peer,
   }) : super(type: 'peer_connected');
 }
@@ -48,7 +48,7 @@ class PeerDisconnectedEvent extends FabricEvent {
   /// Peer ID
   final String peerId;
 
-  const PeerDisconnectedEvent({
+  PeerDisconnectedEvent({
     required this.peerId,
   }) : super(type: 'peer_disconnected');
 }
@@ -61,7 +61,7 @@ class TrackAddedEvent extends FabricEvent {
   /// Peer ID who added the track
   final String peerId;
 
-  const TrackAddedEvent({
+  TrackAddedEvent({
     required this.track,
     required this.peerId,
   }) : super(type: 'track_added');
@@ -75,7 +75,7 @@ class TrackRemovedEvent extends FabricEvent {
   /// Peer ID
   final String peerId;
 
-  const TrackRemovedEvent({
+  TrackRemovedEvent({
     required this.trackId,
     required this.peerId,
   }) : super(type: 'track_removed');
@@ -86,7 +86,7 @@ class RoomJoinedEvent extends FabricEvent {
   /// Room information
   final RoomInfo room;
 
-  const RoomJoinedEvent({
+  RoomJoinedEvent({
     required this.room,
   }) : super(type: 'room_joined');
 }
@@ -96,7 +96,7 @@ class RoomLeftEvent extends FabricEvent {
   /// Room ID
   final String roomId;
 
-  const RoomLeftEvent({
+  RoomLeftEvent({
     required this.roomId,
   }) : super(type: 'room_left');
 }
@@ -109,7 +109,7 @@ class MessageReceivedEvent extends FabricEvent {
   /// Message content
   final dynamic message;
 
-  const MessageReceivedEvent({
+  MessageReceivedEvent({
     required this.senderId,
     required this.message,
   }) : super(type: 'message_received');
@@ -126,7 +126,7 @@ class ErrorEvent extends FabricEvent {
   /// Stack trace if available
   final String? stackTrace;
 
-  const ErrorEvent({
+  ErrorEvent({
     required this.code,
     required this.message,
     this.stackTrace,
@@ -141,7 +141,7 @@ class EncryptionEstablishedEvent extends FabricEvent {
   /// Peer ID
   final String peerId;
 
-  const EncryptionEstablishedEvent({
+  EncryptionEstablishedEvent({
     required this.sessionId,
     required this.peerId,
   }) : super(type: 'encryption_established');
@@ -152,7 +152,7 @@ class MediaStartedEvent extends FabricEvent {
   /// Media type
   final MediaType mediaType;
 
-  const MediaStartedEvent({
+  MediaStartedEvent({
     required this.mediaType,
   }) : super(type: 'media_started');
 }
@@ -162,7 +162,7 @@ class MediaStoppedEvent extends FabricEvent {
   /// Media type
   final MediaType mediaType;
 
-  const MediaStoppedEvent({
+  MediaStoppedEvent({
     required this.mediaType,
   }) : super(type: 'media_stopped');
 }
@@ -172,7 +172,7 @@ class StatsEvent extends FabricEvent {
   /// Connection statistics
   final ConnectionStats stats;
 
-  const StatsEvent({
+  StatsEvent({
     required this.stats,
   }) : super(type: 'stats');
 }

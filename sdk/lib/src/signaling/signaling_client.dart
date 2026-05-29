@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:async' hide TimeoutException;
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
@@ -6,6 +6,7 @@ import 'package:logger/logger.dart';
 import '../config.dart';
 import '../types.dart';
 import '../events.dart';
+import '../exceptions.dart';
 
 /// Signaling message types
 class SignalingMessageType {

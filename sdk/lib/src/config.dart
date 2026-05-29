@@ -127,18 +127,19 @@ class ICEServer {
   });
 
   /// Create a STUN server
-  const ICEServer.stun(String url) : this(urls: [url]);
+  ICEServer.stun(String url)
+      : urls = [url],
+        username = null,
+        credential = null;
 
   /// Create a TURN server
-  const ICEServer.turn({
+  ICEServer.turn({
     required String url,
     required String username,
     required String credential,
-  }) : this(
-          urls: [url],
-          username: username,
-          credential: credential,
-        );
+  }) : urls = [url],
+       username = username,
+       credential = credential;
 
   /// Check if this is a TURN server
   bool get isTURN => urls.any((url) => url.startsWith('turn:'));
