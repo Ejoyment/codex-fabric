@@ -1,0 +1,70 @@
+# CODEX Fabric Signaling Server Configuration
+# This is a sample configuration file for development
+
+server:
+  port: 8080
+  tls_enabled: false
+  tls_cert_file: ""
+  tls_key_file: ""
+  read_timeout: "15s"
+  write_timeout: "15s"
+  idle_timeout: "60s"
+
+signaling:
+  allowed_origins:
+    - "http://localhost:3000"
+    - "http://localhost:5173"
+    - "https://*.codex.inc"
+  max_message_size: 1048576  # 1MB
+  handshake_timeout: "10s"
+  ping_interval: "30s"
+  pong_wait: "60s"
+  write_wait: "10s"
+  max_connections: 10000
+  enable_compression: true
+
+webrtc:
+  ice_servers: []
+  stun_servers:
+    - "stun:stun.l.google.com:19302"
+    - "stun:stun1.l.google.com:19302"
+    - "stun:stun2.l.google.com:19302"
+    - "stun:stun3.l.google.com:19302"
+    - "stun:stun4.l.google.com:19302"
+  turn_servers:
+    - url: "turn:turn.codex.inc:5349"
+      username: "codex"
+      password: "secure_turn_password_change_me"
+      realm: "codex.fabric"
+  enable_turn: false
+  turn_realm: "codex.fabric"
+  ice_gather_timeout: "10s"
+  connection_timeout: "30s"
+  enable_data_channel: true
+
+auth:
+  enabled: false
+  jwt_secret: "change-this-to-a-secure-random-secret-min-32-chars"
+  jwt_expiration: "24h"
+  api_key_header: "X-API-Key"
+  allow_insecure: true
+  required_roles: []
+  max_token_age: "1h"
+
+redis:
+  enabled: false
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+  pool_size: 10
+  min_idle_conns: 5
+  idle_timeout: "5m"
+  dial_timeout: "5s"
+  read_timeout: "3s"
+  write_timeout: "3s"
+
+metrics:
+  enabled: true
+  path: "/metrics"
+  enable_go_metrics: true
+  enable_process_metrics: true
