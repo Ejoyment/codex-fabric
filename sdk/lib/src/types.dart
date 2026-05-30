@@ -76,7 +76,7 @@ class Participant {
   final DateTime joinedAt;
 
   /// Create a new participant
-  const Participant({
+  Participant({
     required this.id,
     this.name,
     this.metadata,
@@ -157,11 +157,11 @@ class RoomInfo {
   final bool isLocked;
 
   /// Create a new room info
-  const RoomInfo({
+  RoomInfo({
     required this.id,
     this.name,
     this.metadata,
-    const List<Participant> participants = const [],
+    this.participants = const [],
     this.maxParticipants,
     this.isLocked = false,
   });

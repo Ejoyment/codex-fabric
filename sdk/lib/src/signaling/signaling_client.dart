@@ -65,9 +65,6 @@ class SignalingClient {
   /// Current room
   String? _currentRoom;
 
-  /// Peer ID in current room
-  String? _peerId;
-
   /// Connection attempt count
   int _reconnectAttempts = 0;
 
@@ -138,7 +135,6 @@ class SignalingClient {
     await _channel?.sink.close();
     _channel = null;
     _currentRoom = null;
-    _peerId = null;
 
     _updateState(ConnectionState.disconnected);
     logger.i('Disconnected from signaling server');
@@ -151,7 +147,6 @@ class SignalingClient {
     }
 
     _currentRoom = roomId;
-    _peerId = peerId;
 
     final completer = Completer<RoomInfo>();
 
@@ -196,7 +191,6 @@ class SignalingClient {
     });
 
     _currentRoom = null;
-    _peerId = null;
   }
 
   /// Send an offer

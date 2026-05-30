@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'key_manager.dart';
@@ -140,7 +139,7 @@ class SecurityHandshake {
     // Perform ECDH and derive session keys
     // This uses our private key + their public key to create shared secrets
     // The server cannot derive these keys because it never sees either private key
-    final sessionKeys = await _keyManager.deriveSessionKeys(
+    await _keyManager.deriveSessionKeys(
       message.exchangePublicKey,
     );
 
@@ -186,7 +185,7 @@ class SecurityHandshake {
 
     // Derive session keys using the peer's exchange public key
     // (which we received earlier in the key exchange message)
-    final sessionKeys = await _keyManager.deriveSessionKeys(
+    await _keyManager.deriveSessionKeys(
       peerExchangePublicKey,
     );
 
