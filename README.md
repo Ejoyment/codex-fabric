@@ -8,20 +8,20 @@
 
 ## Overview
 
-CODEX FABRIC is a self-hosted, end-to-end encrypted (E2EE) streaming infrastructure designed exclusively for high-security enterprise environments including Healthcare, FinTech, and Defense sectors.
+CODEX FABRIC is a self-hosted, end-to-end encrypted (E2EE) streaming infrastructure built for high-security enterprise environments across Healthcare, FinTech, Defense, and regulated Education.
 
 ### The Problem
 
-Enterprises are bleeding sensitive data through third-party cloud communication APIs. Standard cloud APIs are vulnerable to interception and compliance breaches, putting patient data, financial information, and classified communications at risk.
+Today’s real-time collaboration platforms force sensitive audio, video, and data through third-party cloud services. That creates unacceptable risk for hospitals, financial institutions, defense teams, and secure education providers, exposing protected health information, financial intelligence, classified communications, and private learning environments.
 
 ### The Solution
 
-CODEX FABRIC allows enterprises to host their own zero-trust streaming infrastructure, ensuring:
+CODEX FABRIC gives enterprises full ownership of their streaming stack with a zero-trust architecture that keeps media, signaling, and metadata inside customer infrastructure.
 
-- **100% Data Sovereignty** - All data remains within your controlled infrastructure
-- **End-to-End Encryption** - Cryptographic keys are generated and stored exclusively on client devices
-- **Regulatory Compliance** - Built for HIPAA, SOC2, GDPR, and FedRAMP requirements
-- **Ultra-Low Latency** - Go-powered backend handling thousands of concurrent WebRTC connections
+- **100% Data Sovereignty** - All traffic stays within your private environment
+- **True End-to-End Encryption** - Keys are created and managed on client devices only
+- **Compliance-Ready by Design** - Supports HIPAA, SOC 2, GDPR, FedRAMP, and other regulated standards
+- **Resilient Performance** - Optimized for secure low-latency WebRTC in constrained or mission-critical networks
 
 ## Architecture
 
