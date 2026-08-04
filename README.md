@@ -1,204 +1,47 @@
 # CODEX FABRIC
 
-**Self-Hosted, Zero-Trust Video & Data Streaming SDK for High-Security Enterprise Environments**
-
-[![License: MIT](https://img.shields.io/badge/License-Enterprise-blue.svg)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/Ejoyment/codex-fabric/backend)](https://goreportcard.com/report/github.com/Ejoyment/codex-fabric/backend)
-[![Security Audit](https://img.shields.io/badge/Security-OSCP--Grade-brightgreen.svg)](SECURITY.md)
+**A self-hosted, end-to-end encrypted streaming architecture — backend and crypto foundation, with SDKs still in progress.**
 
 ## Overview
 
-CODEX FABRIC is a self-hosted, end-to-end encrypted (E2EE) streaming infrastructure built for high-security enterprise environments across Healthcare, FinTech, Defense, and regulated Education.
+CODEX FABRIC explores what a self-hosted, end-to-end encrypted (E2EE) real-time streaming architecture could look like for environments that can't send audio/video/data through third-party cloud services — the kind of constraint hospitals, financial institutions, and defense contexts operate under.
 
-### The Problem
-
-Today’s real-time collaboration platforms force sensitive audio, video, and data through third-party cloud services. That creates unacceptable risk for hospitals, financial institutions, defense teams, and secure education providers, exposing protected health information, financial intelligence, classified communications, and private learning environments.
-
-### The Solution
-
-CODEX FABRIC gives enterprises full ownership of their streaming stack with a zero-trust architecture that keeps media, signaling, and metadata inside customer infrastructure.
-
-- **100% Data Sovereignty** - All traffic stays within your private environment
-- **True End-to-End Encryption** - Keys are created and managed on client devices only
-- **Compliance-Ready by Design** - Supports HIPAA, SOC 2, GDPR, FedRAMP, and other regulated standards
-- **Resilient Performance** - Optimized for secure low-latency WebRTC in constrained or mission-critical networks
+**This is an early-stage project, not a certified or audited product.** Read the "What's working" and "Known limitations" sections carefully before evaluating any part of it as production-ready.
 
 ## Architecture
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Client App    │    │   Client App    │    │   Client App    │
-│  (iOS/Android)  │    │     (Web)       │    │  (Desktop)      │
-│                 │    │                 │    │                 │
-│  ┌───────────┐  │    │  ┌───────────┐  │    │  ┌───────────┐  │
-│  │  Flutter  │  │    │  │  Flutter  │  │    │  │  Flutter  │  │
-│  │    SDK    │  │    │  │    SDK    │  │    │  │    SDK    │  │
-│  └─────┬─────┘  │    │  └─────┬─────┘  │    │  └─────┬─────┘  │
-└────────┼────────┘    └────────┼────────┘    └────────┼────────┘
-         │                      │                      │
-         │         E2EE         │         E2EE         │
-         │                      │                      │
-         ▼                      ▼                      ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                        CODEX FABRIC                              │
-│                     Signaling Server (Go)                        │
-│                                                                  │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
-│  │   WebRTC    │  │    Auth     │  │   Anomaly   │              │
-│  │  Signaling  │  │   Layer     │  │  Detection  │              │
-│  └─────────────┘  └─────────────┘  └─────────────┘              │
-└─────────────────────────────────────────────────────────────────┘
-```
+Client App (iOS/Android/Web/Desktop)
+│ E2EE
+▼
+CODEX FABRIC Signaling Server (Go)
 
-## Project Structure
+WebRTC Signaling
+Auth Layer
+Key Exchange Relay
 
-```
-codex-fabric/
-├── backend/                    # Go signaling server
-│   ├── cmd/server/             # Application entry point
-│   ├── internal/signaling/     # WebSocket signaling + E2EE relay
-│   ├── internal/webrtc/        # WebRTC connection management
-│   ├── internal/auth/          # JWT authentication
-│   ├── pkg/crypto/             # Server-side crypto (AES-GCM, Ed25519, X25519, HKDF)
-│   └── config.yaml             # Server configuration
-├── sdk/                        # Flutter/Dart SDK (iOS, Android, Web, Desktop)
-│   ├── lib/src/crypto/         # E2EE key management + handshake
-│   ├── lib/src/signaling/      # WebSocket signaling client
-│   ├── lib/src/webrtc/         # WebRTC peer connections
-│   └── test/crypto/            # E2EE integration tests
-├── sdk-js/                     # JavaScript/TypeScript SDK (React, React Native, Node.js)
-│   └── src/                    # Crypto, signaling, and handshake modules
-├── poc-app/                    # White-labeled telemedicine demo app
-├── tests/
-│   ├── load/                   # Python load testing suite
-│   └── security/               # Security audit / penetration tests
-├── docs/                       # Documentation
-│   ├── QUICKSTART.md           # < 30 min integration guide
-│   ├── API_REFERENCE.md        # Flutter + JS + Go API docs
-│   ├── DEPLOYMENT.md           # Docker + air-gapped deployment
-│   ├── E2EE_SECURITY_ARCHITECTURE.md
-│   ├── SIGNALING_PROTOCOL.md
-│   ├── BETA_TESTING_GUIDE.md
-│   ├── GOLIVE_CHECKLIST.md
-│   ├── SALES_OUTREACH_TEMPLATES.md
-│   └── RELEASE_NOTES.md
-└── .github/workflows/ci.yml   # CI/CD pipeline
-```
+## What's working
 
-## Quick Start
+- **Signaling server (Go)** — real WebSocket-based signaling handling `join`, `leave`, `offer`, `answer`, `ice-candidate`, `key-exchange`, and `key-exchange-ack` messages
+- **WebRTC peer connection management** — built on `pion/webrtc`, with real `PeerConnection` objects, ICE handling, and data channel support
+- **Server-side crypto library (Go)** — genuinely implements AES-256-GCM encryption, Ed25519 signing, X25519 ECDH key exchange, and HKDF-SHA256 session key derivation. This is real, working cryptography, not a stub.
+- **SDK handshake logic and tests** — the handshake flow (peer A/B key exchange) is implemented and tested at the protocol level in the Dart SDK test suite
 
-### Prerequisites
+## Known limitations
 
-- Go 1.21+
-- Flutter 3.x+
-- Docker & Docker Compose
-- OpenSSL 3.x+
+- **Flutter SDK crypto is placeholder, not production-grade.** It defines the correct API shape but uses simplified crypto operations for architecture demonstration. Comments in the code note that production use requires real libraries (`pointycastle`, `cryptography`, `ed25519_edwards`) — this hasn't been done yet.
+- **JS SDK crypto is also placeholder.** It currently generates fake keys and uses XOR instead of real encryption. This needs to be replaced with the Web Crypto API or a real crypto library (e.g. `@noble/ed25519`) before any client can safely rely on it.
+- **JWT authentication exists but isn't wired in.** The auth/token validation code is implemented but not yet connected to the WebSocket or HTTP request path.
+- **The demo app (`poc-app/`) is a static UI mockup**, not a working connected application — it doesn't currently load the SDK or make real signaling/WebRTC connections.
+- **No independent security audit has been performed.** The included penetration test script is a self-written smoke test with several hardcoded pass conditions, not a substitute for real audit or certification.
+- **Not compliant with HIPAA, SOC 2, GDPR, FedRAMP, or PCI DSS.** These require formal certification processes this project hasn't gone through. Don't use this for regulated data.
 
-### Running the Backend
+## Roadmap
 
-```bash
-cd backend
-go mod download
-go run cmd/server/main.go
-```
-
-### Integrating the SDK
-
-**Flutter/Dart** — Add to your `pubspec.yaml`:
-
-```yaml
-dependencies:
-  codex_fabric:
-    git:
-      url: https://github.com/Ejoyment/codex-fabric.git
-      path: sdk
-```
-
-```dart
-import 'package:codex_fabric/codex_fabric.dart';
-
-final handshake = SecurityHandshake(keyManager: KeyManager());
-await handshake.initialize();
-await handshake.initiateKeyExchange('peer-id');
-```
-
-**JavaScript/TypeScript** — `npm install @codex-fabric/sdk`:
-
-```typescript
-import { KeyManager, SecurityHandshake, SignalingClient } from '@codex-fabric/sdk';
-
-const km = new KeyManager();
-const signaling = new SignalingClient({ url: 'wss://your-server.com', roomId: 'room-1' });
-const handshake = new SecurityHandshake(km, signaling);
-await handshake.initialize();
-handshake.initiateKeyExchange('peer-id');
-```
-
-See [Quick Start Guide](docs/QUICKSTART.md) for the full 30-minute walkthrough.
-
-## Security
-
-CODEX FABRIC is engineered from an offensive security perspective with OSCP-grade security protocols:
-
-- **Zero-Trust Architecture** - Never trust, always verify
-- **Client-Side Key Generation** - Keys never leave the client device
-- **Perfect Forward Secrecy** - Each session uses unique encryption keys
-- **Certificate Pinning** - Prevents man-in-the-middle attacks
-- **Regular Penetration Testing** - Baked into CI/CD pipeline
-
-See [SECURITY.md](SECURITY.md) for detailed security documentation.
-
-## Documentation
-
-- [Quick Start Guide](docs/QUICKSTART.md) — < 30 minute integration
-- [API Reference](docs/API_REFERENCE.md) — Flutter + JS + Go
-- [E2EE Security Architecture](docs/E2EE_SECURITY_ARCHITECTURE.md)
-- [Signaling Protocol](docs/SIGNALING_PROTOCOL.md)
-- [Deployment Guide](docs/DEPLOYMENT.md) — Docker, air-gapped, systemd
-- [Security Audit](docs/SECURITY.md) — Penetration test results
-- [Beta Testing Guide](docs/BETA_TESTING_GUIDE.md)
-- [Go-Live Checklist](docs/GOLIVE_CHECKLIST.md)
-- [Sales Outreach Templates](docs/SALES_OUTREACH_TEMPLATES.md)
-- [Release Notes](docs/RELEASE_NOTES.md)
-
-## Pricing & Licensing
-
-CODEX FABRIC is a commercial enterprise product. See [PRICING.md](PRICING.md) for details.
-
-| Tier | Annual Pricing | Features |
-|------|----------------|----------|
-| Growth | $15,000/year | Up to 500 active streams, Public cloud deployment |
-| Enterprise | $50,000-$120,000+/year | Unlimited streams, On-Premise/Air-gapped deployment |
-
-## Support
-
-Enterprise customers receive dedicated support:
-
-- **Growth Tier**: Standard business hours support
-- **Enterprise Tier**: 24/7 dedicated support with 15-minute SLA
-
-Contact: security@codex.inc
-
-## Compliance
-
-CODEX FABRIC is designed to help enterprises meet:
-
-- **HIPAA** - Healthcare data protection
-- **SOC 2 Type II** - Security, availability, and confidentiality
-- **GDPR** - EU data protection regulation
-- **FedRAMP** - US government cloud security (Enterprise tier)
-- **PCI DSS** - Payment card industry data security
-
-## Contributing
-
-CODEX FABRIC is a commercial product. External contributions are accepted under our CLA process. Please contact opensource@codex.inc for contribution guidelines.
+- Replace Flutter and JS SDK crypto with real implementations
+- Wire JWT auth into the signaling server request path
+- Connect `poc-app` to a real, working SDK integration
+- Independent security review before any production consideration
 
 ## License
 
-Proprietary enterprise software. See [LICENSE](LICENSE) for terms.
-
----
-
-**v0.1.0 "First Handshake"** — 12-week MVP complete. See [Release Notes](docs/RELEASE_NOTES.md).
-
-© 2024 CODEX INC ENTERPRISE. All rights reserved. CODEX FABRIC is a trademark of CODEX Inc.
+MIT
