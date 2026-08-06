@@ -83,3 +83,5 @@ docker-compose.override.yml
 
 # Analysis
 .dart_tool/
+
+node_modules/
