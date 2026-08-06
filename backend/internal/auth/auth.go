@@ -63,6 +63,11 @@ func NewValidator(cfg config.AuthConfig) *Validator {
 	return v
 }
 
+// Enabled reports whether authentication is active for this validator.
+func (v *Validator) Enabled() bool {
+	return v != nil && v.config.Enabled
+}
+
 // GenerateToken creates a new JWT token for a user
 func (v *Validator) GenerateToken(userID, orgID string, roles []string, permissions []string) (string, time.Time, error) {
 	if !v.config.Enabled {

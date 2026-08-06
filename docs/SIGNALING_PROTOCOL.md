@@ -254,7 +254,7 @@ Client A                           Server                          Client B
 
 ## Security Considerations
 
-1. **Authentication**: Optional JWT-based authentication can be enabled
+1. **Authentication**: JWT-based authentication can be enabled in `config.yaml` (`auth.enabled: true`). When enabled, the `/ws` endpoint rejects connections without a valid token with HTTP 401 before the WebSocket upgrade. Clients present the token either as an `Authorization: Bearer <token>` header or as a `?token=<token>` query parameter (for browsers, which cannot set custom WebSocket headers). Tokens are validated against the configured `jwt_secret`; `auth.required_roles` optionally restricts access by role (HTTP 403 otherwise). The `/health`, `/ready`, and `/metrics` endpoints remain public.
 2. **CORS**: Origin validation is performed based on configured allowed origins
 3. **Rate Limiting**: Connection limits can be configured per server
 4. **TLS**: Production deployments should use WSS (WebSocket Secure)

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Ejoyment/codex-fabric/backend/internal/auth"
 	"github.com/Ejoyment/codex-fabric/backend/internal/config"
 	"github.com/Ejoyment/codex-fabric/backend/internal/webrtc"
 	"github.com/gorilla/websocket"
@@ -18,6 +19,12 @@ import (
 
 // createTestServer creates a signaling server for testing
 func createTestServer(t *testing.T) (*Server, *httptest.Server, *webrtc.Manager) {
+	return createTestServerWithAuth(t, nil)
+}
+
+// createTestServerWithAuth creates a signaling server with an optional auth
+// validator. When authValidator is nil, the /ws endpoint is left unprotected.
+func createTestServerWithAuth(t *testing.T, authValidator *auth.Validator) (*Server, *httptest.Server, *webrtc.Manager) {
 	logger, _ := zap.NewDevelopment()
 
 	cfg := config.WebRTCConfig{
@@ -42,12 +49,16 @@ func createTestServer(t *testing.T) (*Server, *httptest.Server, *webrtc.Manager)
 		EnableCompression: false,
 	}
 
-	server, err := NewServer(sigCfg, webrtcMgr, logger)
+	server, err := NewServer(sigCfg, webrtcMgr, authValidator, logger)
 	require.NoError(t, err)
 
 	// Create HTTP test server
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ws", server.HandleWebSocket)
+	if authValidator != nil {
+		mux.Handle("/ws", authValidator.HTTPMiddleware(http.HandlerFunc(server.HandleWebSocket)))
+	} else {
+		mux.HandleFunc("/ws", server.HandleWebSocket)
+	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
@@ -60,14 +71,28 @@ func createTestServer(t *testing.T) (*Server, *httptest.Server, *webrtc.Manager)
 
 // connectWebSocket connects a WebSocket client to the test server
 func connectWebSocket(t *testing.T, httpServer *httptest.Server) (*websocket.Conn, chan []byte) {
+	conn, messages, _, err := connectWebSocketWithHeaders(t, httpServer, nil)
+	require.NoError(t, err)
+	return conn, messages
+}
+
+// connectWebSocketWithHeaders connects a WebSocket client with custom headers.
+// The HTTP response is always returned so callers can inspect the status code
+// when the handshake is rejected (e.g. by auth middleware).
+func connectWebSocketWithHeaders(t *testing.T, httpServer *httptest.Server, headers http.Header) (*websocket.Conn, chan []byte, *http.Response, error) {
 	url := "ws" + httpServer.URL[4:] + "/ws"
 
 	// Set up headers to pass CORS check
 	header := http.Header{}
 	header.Set("Origin", httpServer.URL)
+	for k, v := range headers {
+		header[k] = v
+	}
 
-	conn, _, err := websocket.DefaultDialer.Dial(url, header)
-	require.NoError(t, err)
+	conn, resp, err := websocket.DefaultDialer.Dial(url, header)
+	if err != nil {
+		return nil, nil, resp, err
+	}
 
 	// Create a channel to receive messages
 	messages := make(chan []byte, 10)
@@ -84,7 +109,7 @@ func connectWebSocket(t *testing.T, httpServer *httptest.Server) (*websocket.Con
 		}
 	}()
 
-	return conn, messages
+	return conn, messages, resp, nil
 }
 
 // readMessage reads a message from the channel with timeout
@@ -115,7 +140,7 @@ func TestServer_NewServer(t *testing.T) {
 		MaxConnections: 100,
 	}
 
-	server, err := NewServer(sigCfg, webrtcMgr, logger)
+	server, err := NewServer(sigCfg, webrtcMgr, nil, logger)
 	require.NoError(t, err)
 	assert.NotNil(t, server)
 }
@@ -503,4 +528,138 @@ func TestServer_GetStats(t *testing.T) {
 	stats = server.GetStats()
 
 	assert.Equal(t, 1, stats["active_rooms"])
+}
+
+func TestServer_WebSocketAuthDefensiveReject(t *testing.T) {
+	// Server is configured with auth enabled, but /ws is registered WITHOUT
+	// the auth middleware. The server must still reject unauthenticated
+	// connections before the upgrade as a defensive measure.
+	logger, _ := zap.NewDevelopment()
+
+	webrtcMgr, err := webrtc.NewManager(config.WebRTCConfig{EnableDataChannel: false}, logger)
+	require.NoError(t, err)
+	defer webrtcMgr.Close()
+
+	sigCfg := config.SignalingConfig{
+		AllowedOrigins: []string{"*"},
+		MaxMessageSize: 1024 * 1024,
+		MaxConnections: 100,
+	}
+
+	server, err := NewServer(sigCfg, webrtcMgr, newTestAuthValidator(t), logger)
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", server.HandleWebSocket)
+	httpServer := httptest.NewServer(mux)
+	defer httpServer.Close()
+
+	_, _, resp, err := connectWebSocketWithHeaders(t, httpServer, nil)
+	require.Error(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+// newTestAuthValidator returns a Validator with auth enabled for testing
+func newTestAuthValidator(t *testing.T) *auth.Validator {
+	t.Helper()
+	v := auth.NewValidator(config.AuthConfig{
+		Enabled:       true,
+		JWTSecret:     "test-secret-that-is-long-enough-for-hs256-1234",
+		JWTExpiration: time.Hour,
+		MaxTokenAge:   time.Hour,
+	})
+	return v
+}
+
+func TestServer_WebSocketAuthRejectedWithoutToken(t *testing.T) {
+	_, httpServer, webrtcMgr := createTestServerWithAuth(t, newTestAuthValidator(t))
+	defer webrtcMgr.Close()
+	defer httpServer.Close()
+
+	// Dialing without credentials must be rejected before the upgrade
+	_, _, resp, err := connectWebSocketWithHeaders(t, httpServer, nil)
+	require.Error(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+func TestServer_WebSocketAuthRejectedInvalidToken(t *testing.T) {
+	_, httpServer, webrtcMgr := createTestServerWithAuth(t, newTestAuthValidator(t))
+	defer webrtcMgr.Close()
+	defer httpServer.Close()
+
+	headers := http.Header{}
+	headers.Set("Authorization", "Bearer not-a-valid-token")
+
+	_, _, resp, err := connectWebSocketWithHeaders(t, httpServer, headers)
+	require.Error(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+func TestServer_WebSocketAuthAcceptedBearerToken(t *testing.T) {
+	validator := newTestAuthValidator(t)
+	token, _, err := validator.GenerateToken("user-1", "org-1", []string{"user"}, nil)
+	require.NoError(t, err)
+
+	server, httpServer, webrtcMgr := createTestServerWithAuth(t, validator)
+	defer webrtcMgr.Close()
+	defer httpServer.Close()
+
+	headers := http.Header{}
+	headers.Set("Authorization", "Bearer "+token)
+
+	conn, messages, _, err := connectWebSocketWithHeaders(t, httpServer, headers)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Should receive welcome message
+	msg := readMessage(t, messages, 5*time.Second)
+
+	var welcomeMsg Message
+	err = json.Unmarshal(msg, &welcomeMsg)
+	require.NoError(t, err)
+
+	assert.Equal(t, MessageTypeWelcome, welcomeMsg.Type)
+	assert.NotEmpty(t, welcomeMsg.ID)
+
+	// The client should be marked as authenticated server-side
+	server.clientsMu.RLock()
+	var client *Client
+	for _, c := range server.clients {
+		client = c
+		break
+	}
+	server.clientsMu.RUnlock()
+
+	require.NotNil(t, client)
+	assert.True(t, client.authenticated)
+	assert.Equal(t, "user-1", client.userID)
+	assert.Equal(t, "org-1", client.orgID)
+	assert.Equal(t, []string{"user"}, client.roles)
+}
+
+func TestServer_WebSocketAuthAcceptedQueryToken(t *testing.T) {
+	validator := newTestAuthValidator(t)
+	token, _, err := validator.GenerateToken("user-1", "org-1", []string{"user"}, nil)
+	require.NoError(t, err)
+
+	_, httpServer, webrtcMgr := createTestServerWithAuth(t, validator)
+	defer webrtcMgr.Close()
+	defer httpServer.Close()
+
+	// Query param fallback for clients that cannot set custom headers
+	url := "ws" + httpServer.URL[4:] + "/ws?token=" + token
+	header := http.Header{}
+	header.Set("Origin", httpServer.URL)
+
+	conn, _, err := websocket.DefaultDialer.Dial(url, header)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Should receive welcome message
+	var welcomeMsg Message
+	require.NoError(t, conn.ReadJSON(&welcomeMsg))
+	assert.Equal(t, MessageTypeWelcome, welcomeMsg.Type)
 }

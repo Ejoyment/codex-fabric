@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Ejoyment/codex-fabric/backend/internal/auth"
 	"github.com/Ejoyment/codex-fabric/backend/internal/config"
 	"github.com/Ejoyment/codex-fabric/backend/internal/webrtc"
 	"github.com/google/uuid"
@@ -68,6 +69,9 @@ type Client struct {
 	peerID        string
 	send          chan []byte
 	authenticated bool
+	userID        string
+	orgID         string
+	roles         []string
 	lastActivity  time.Time
 	mu            sync.RWMutex
 }
@@ -76,6 +80,7 @@ type Client struct {
 type Server struct {
 	config    config.SignalingConfig
 	webrtcMgr *webrtc.Manager
+	auth      *auth.Validator
 	logger    *zap.Logger
 	upgrader  websocket.Upgrader
 	clients   map[string]*Client
@@ -93,7 +98,7 @@ type Hub struct {
 }
 
 // NewServer creates a new signaling server
-func NewServer(cfg config.SignalingConfig, webrtcMgr *webrtc.Manager, logger *zap.Logger) (*Server, error) {
+func NewServer(cfg config.SignalingConfig, webrtcMgr *webrtc.Manager, authValidator *auth.Validator, logger *zap.Logger) (*Server, error) {
 	allowedOrigins := make(map[string]bool)
 	for _, origin := range cfg.AllowedOrigins {
 		allowedOrigins[origin] = true
@@ -102,6 +107,7 @@ func NewServer(cfg config.SignalingConfig, webrtcMgr *webrtc.Manager, logger *za
 	s := &Server{
 		config:    cfg,
 		webrtcMgr: webrtcMgr,
+		auth:      authValidator,
 		logger:    logger,
 		clients:   make(map[string]*Client),
 		rooms:     make(map[string]map[string]*Client),
@@ -137,6 +143,20 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read the authenticated identity attached to the request by the auth
+	// middleware. When auth is disabled no claims are present and the client
+	// remains unauthenticated.
+	claims := auth.ClaimsFromContext(r.Context())
+
+	// Defensive check: if the server is configured to require authentication
+	// but the request was not authorized, reject it before upgrading. This
+	// protects against the middleware wrapper being accidentally bypassed.
+	if s.auth != nil && s.auth.Enabled() && claims == nil {
+		s.logger.Warn("Rejecting unauthenticated WebSocket connection")
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+
 	// Upgrade HTTP connection to WebSocket
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -153,6 +173,13 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		lastActivity: time.Now(),
 	}
 
+	if claims != nil {
+		client.authenticated = true
+		client.userID = claims.UserID
+		client.orgID = claims.OrgID
+		client.roles = claims.Roles
+	}
+
 	// Register client
 	s.clientsMu.Lock()
 	s.clients[client.ID] = client
@@ -162,6 +189,8 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	s.logger.Info("Client connected",
 		zap.String("client_id", client.ID),
 		zap.String("remote_addr", r.RemoteAddr),
+		zap.Bool("authenticated", client.authenticated),
+		zap.String("user_id", client.userID),
 		zap.Int64("total_connections", atomic.LoadInt64(&s.connCount)))
 
 	// Send welcome message
