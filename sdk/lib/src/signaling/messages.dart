@@ -363,7 +363,11 @@ class PingRequest extends SignalingMessage {
 /// end-to-end encryption. Only public keys are transmitted; private
 /// keys NEVER leave the client device.
 class KeyExchangeMessage extends SignalingMessage {
-  /// Target peer ID
+  /// Peer ID.
+  ///
+  /// When sent to the signaling server this is the target peer ID used for
+  /// routing. When the server relays the message to that peer, it replaces
+  /// this field with the sender's peer ID.
   final String peerId;
 
   /// Sender's Ed25519 signing public key (hex encoded)
@@ -406,6 +410,8 @@ class KeyExchangeMessage extends SignalingMessage {
 /// Key exchange acknowledgment (Server -> Client)
 /// 
 /// Confirms that the key exchange message was forwarded to the target peer.
+/// Carries the responder's public keys so the initiator can complete the
+/// handshake locally.
 class KeyExchangeAckMessage extends SignalingMessage {
   /// The peer ID that received the key exchange
   final String peerId;
@@ -413,15 +419,25 @@ class KeyExchangeAckMessage extends SignalingMessage {
   /// Status of the key exchange
   final String status;
 
+  /// Responder's Ed25519 signing public key (hex encoded)
+  final String? signingPublicKey;
+
+  /// Responder's X25519 exchange public key (hex encoded)
+  final String? exchangePublicKey;
+
   KeyExchangeAckMessage({
     required this.peerId,
     required this.status,
+    this.signingPublicKey,
+    this.exchangePublicKey,
   }) : super(type: MessageType.keyExchangeAck);
 
   factory KeyExchangeAckMessage.fromJson(Map<String, dynamic> json) {
     return KeyExchangeAckMessage(
       peerId: json['peer_id'] as String,
       status: json['status'] as String,
+      signingPublicKey: json['signing_public_key'] as String?,
+      exchangePublicKey: json['exchange_public_key'] as String?,
     );
   }
 
@@ -431,6 +447,8 @@ class KeyExchangeAckMessage extends SignalingMessage {
       ...super.toJson(),
       'peer_id': peerId,
       'status': status,
+      if (signingPublicKey != null) 'signing_public_key': signingPublicKey,
+      if (exchangePublicKey != null) 'exchange_public_key': exchangePublicKey,
     };
   }
 }

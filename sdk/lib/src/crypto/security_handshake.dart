@@ -158,21 +158,21 @@ class SecurityHandshake {
     // Notify callback
     onHandshakeComplete?.call(message.peerId, sessionInfo);
 
-    // Return acknowledgment (server will relay this to the initiating peer)
+    // Return acknowledgment containing our public keys so the initiating
+    // peer can complete the handshake (server will relay this to the peer).
     return KeyExchangeAckMessage(
       peerId: message.peerId,
       status: 'established',
+      signingPublicKey: _keyManager.signingPublicKey,
+      exchangePublicKey: _keyManager.exchangePublicKey,
     );
   }
 
   /// Process a key exchange acknowledgment from a peer.
   ///
   /// This completes the handshake from the initiator's side, storing
-  /// the peer's keys and deriving session encryption keys.
-  Future<void> processKeyExchangeAck(
-    KeyExchangeAckMessage ack,
-    String peerExchangePublicKey,
-  ) async {
+  /// the peer's public keys and deriving session encryption keys.
+  Future<void> processKeyExchangeAck(KeyExchangeAckMessage ack) async {
     if (!_keyManager.isInitialized) {
       throw StateError('KeyManager not initialized.');
     }
@@ -183,26 +183,35 @@ class SecurityHandshake {
       return;
     }
 
-    // Derive session keys using the peer's exchange public key
-    // (which we received earlier in the key exchange message)
-    await _keyManager.deriveSessionKeys(
-      peerExchangePublicKey,
+    // The acknowledgment carries the responder's public keys (added by the
+    // server when relaying the ack back to us).
+    final signingPublicKey = ack.signingPublicKey;
+    final exchangePublicKey = ack.exchangePublicKey;
+    if (signingPublicKey == null || exchangePublicKey == null) {
+      throw StateError('Key exchange ack is missing peer public keys');
+    }
+
+    // Store the peer's public keys
+    _peerKeys[ack.peerId] = PeerPublicKeys(
+      peerId: ack.peerId,
+      signingPublicKey: signingPublicKey,
+      exchangePublicKey: exchangePublicKey,
     );
 
+    // Derive session keys using the responder's exchange public key
+    await _keyManager.deriveSessionKeys(exchangePublicKey);
+
     // Store the established session
-    final peerKeys = _peerKeys[ack.peerId];
-    if (peerKeys != null) {
-      final sessionInfo = SessionInfo(
-        peerId: ack.peerId,
-        peerSigningPublicKey: peerKeys.signingPublicKey,
-        peerExchangePublicKey: peerExchangePublicKey,
-        localExchangePublicKey: _keyManager.exchangePublicKey,
-        establishedAt: DateTime.now(),
-      );
-      _establishedSessions[peerExchangePublicKey] = sessionInfo;
-      _state = SecurityHandshakeState.established;
-      onHandshakeComplete?.call(ack.peerId, sessionInfo);
-    }
+    final sessionInfo = SessionInfo(
+      peerId: ack.peerId,
+      peerSigningPublicKey: signingPublicKey,
+      peerExchangePublicKey: exchangePublicKey,
+      localExchangePublicKey: _keyManager.exchangePublicKey,
+      establishedAt: DateTime.now(),
+    );
+    _establishedSessions[exchangePublicKey] = sessionInfo;
+    _state = SecurityHandshakeState.established;
+    onHandshakeComplete?.call(ack.peerId, sessionInfo);
   }
 
   /// Encrypt data for a specific peer using the established session keys.

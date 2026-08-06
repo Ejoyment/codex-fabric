@@ -14,6 +14,36 @@ import 'package:codex_fabric/src/signaling/messages.dart';
 /// 2. Encrypted data can be decrypted by the peer
 /// 3. The signaling server only sees public keys (never private keys)
 /// 4. Signatures can be verified by peers
+/// Simulates the signaling server relaying a key-exchange message to the
+/// target peer. The server replaces `peer_id` with the sender's peer ID
+/// (mirrors `backend/internal/signaling/server.go` `handleKeyExchange`).
+KeyExchangeMessage _serverRelayKeyExchange(
+  KeyExchangeMessage message,
+  String senderPeerId,
+) {
+  return KeyExchangeMessage(
+    peerId: senderPeerId,
+    signingPublicKey: message.signingPublicKey,
+    exchangePublicKey: message.exchangePublicKey,
+    signature: message.signature,
+  );
+}
+
+/// Simulates the signaling server relaying a key-exchange acknowledgment
+/// back to the initiator, tagged with the responder's peer ID (mirrors
+/// `backend/internal/signaling/server.go` `handleKeyExchangeAck`).
+KeyExchangeAckMessage _serverRelayAck(
+  KeyExchangeAckMessage ack,
+  String responderPeerId,
+) {
+  return KeyExchangeAckMessage(
+    peerId: responderPeerId,
+    status: ack.status,
+    signingPublicKey: ack.signingPublicKey,
+    exchangePublicKey: ack.exchangePublicKey,
+  );
+}
+
 void main() {
   group('E2EE Handshake Integration Test', () {
     late SecurityHandshake alice;
@@ -40,7 +70,7 @@ void main() {
       expect(keyExchangeMsg.type, equals(MessageType.keyExchange));
       expect(keyExchangeMsg.signingPublicKey, isNotEmpty);
       expect(keyExchangeMsg.exchangePublicKey, isNotEmpty);
-      expect(keyExchangeMsg.peerId, equals('bob-peer-id'));
+      expect(keyExchangeMsg.peerId, equals('bob-peer-id')); // target peer
 
       // CRITICAL: Verify private keys are NOT in the message
       final msgJson = keyExchangeMsg.toJson();
@@ -48,8 +78,9 @@ void main() {
       expect(msgJson.containsKey('exchange_private_key'), isFalse);
 
       // Step 2: "Server" relays message to Bob (simulated)
-      // The server only forwards the public keys
-      final relayedMsg = KeyExchangeMessage.fromJson(msgJson);
+      // The server only forwards the public keys and tags the message
+      // with the sender's peer ID.
+      final relayedMsg = _serverRelayKeyExchange(keyExchangeMsg, 'alice-peer-id');
 
       // Step 3: Bob processes the key exchange
       final ackMsg = await bob.processKeyExchangeMessage(relayedMsg);
@@ -57,21 +88,26 @@ void main() {
       // Verify acknowledgment
       expect(ackMsg.type, equals(MessageType.keyExchangeAck));
       expect(ackMsg.status, equals('established'));
+      expect(ackMsg.exchangePublicKey, equals(bob.keyManager.exchangePublicKey));
 
-      // Step 4: Alice processes the acknowledgment
-      await alice.processKeyExchangeAck(ackMsg, keyExchangeMsg.exchangePublicKey);
+      // Step 4: Server relays the ack back to Alice (simulated)
+      final relayedAck = _serverRelayAck(ackMsg, 'bob-peer-id');
 
-      // Step 5: Verify both sides have established the session
+      // Step 5: Alice processes the acknowledgment
+      await alice.processKeyExchangeAck(relayedAck);
+
+      // Step 6: Verify both sides have established the session
       expect(alice.isSessionEstablished('bob-peer-id'), isTrue);
       expect(bob.isSessionEstablished('alice-peer-id'), isTrue);
     });
 
     test('encrypted data exchange after handshake', () async {
-      // Perform handshake
+      // Perform handshake (server tags relayed messages with sender peer IDs)
       final keyExchangeMsg = await alice.createKeyExchangeMessage('bob-peer-id');
-      final relayedMsg = KeyExchangeMessage.fromJson(keyExchangeMsg.toJson());
+      final relayedMsg = _serverRelayKeyExchange(keyExchangeMsg, 'alice-peer-id');
       final ackMsg = await bob.processKeyExchangeMessage(relayedMsg);
-      await alice.processKeyExchangeAck(ackMsg, keyExchangeMsg.exchangePublicKey);
+      final relayedAck = _serverRelayAck(ackMsg, 'bob-peer-id');
+      await alice.processKeyExchangeAck(relayedAck);
 
       // Alice encrypts a message for Bob
       final plaintext = utf8.encode('Hello Bob, this is a secret message from Alice!');
@@ -89,11 +125,12 @@ void main() {
     });
 
     test('bidirectional encrypted communication', () async {
-      // Perform handshake
+      // Perform handshake (server tags relayed messages with sender peer IDs)
       final keyExchangeMsg = await alice.createKeyExchangeMessage('bob-peer-id');
-      final relayedMsg = KeyExchangeMessage.fromJson(keyExchangeMsg.toJson());
+      final relayedMsg = _serverRelayKeyExchange(keyExchangeMsg, 'alice-peer-id');
       final ackMsg = await bob.processKeyExchangeMessage(relayedMsg);
-      await alice.processKeyExchangeAck(ackMsg, keyExchangeMsg.exchangePublicKey);
+      final relayedAck = _serverRelayAck(ackMsg, 'bob-peer-id');
+      await alice.processKeyExchangeAck(relayedAck);
 
       // Alice -> Bob
       final msg1 = utf8.encode('Message from Alice to Bob');
@@ -111,9 +148,10 @@ void main() {
     test('digital signature verification across peers', () async {
       // Perform handshake so peers have each other's public keys
       final keyExchangeMsg = await alice.createKeyExchangeMessage('bob-peer-id');
-      final relayedMsg = KeyExchangeMessage.fromJson(keyExchangeMsg.toJson());
+      final relayedMsg = _serverRelayKeyExchange(keyExchangeMsg, 'alice-peer-id');
       final ackMsg = await bob.processKeyExchangeMessage(relayedMsg);
-      await alice.processKeyExchangeAck(ackMsg, keyExchangeMsg.exchangePublicKey);
+      final relayedAck = _serverRelayAck(ackMsg, 'bob-peer-id');
+      await alice.processKeyExchangeAck(relayedAck);
 
       // Alice signs a message
       final data = utf8.encode('Important document hash');
@@ -152,18 +190,20 @@ void main() {
     test('multiple independent sessions', () async {
       // Alice <-> Bob session
       final keyExchangeAB = await alice.createKeyExchangeMessage('bob-peer-id');
-      final relayedAB = KeyExchangeMessage.fromJson(keyExchangeAB.toJson());
+      final relayedAB = _serverRelayKeyExchange(keyExchangeAB, 'alice-peer-id');
       final ackAB = await bob.processKeyExchangeMessage(relayedAB);
-      await alice.processKeyExchangeAck(ackAB, keyExchangeAB.exchangePublicKey);
+      final relayedAckAB = _serverRelayAck(ackAB, 'bob-peer-id');
+      await alice.processKeyExchangeAck(relayedAckAB);
 
       // Alice <-> Charlie session (separate)
       final charlie = SecurityHandshake(keyManager: KeyManager());
       await charlie.initialize();
 
       final keyExchangeAC = await alice.createKeyExchangeMessage('charlie-peer-id');
-      final relayedAC = KeyExchangeMessage.fromJson(keyExchangeAC.toJson());
+      final relayedAC = _serverRelayKeyExchange(keyExchangeAC, 'alice-peer-id');
       final ackAC = await charlie.processKeyExchangeMessage(relayedAC);
-      await alice.processKeyExchangeAck(ackAC, keyExchangeAC.exchangePublicKey);
+      final relayedAckAC = _serverRelayAck(ackAC, 'charlie-peer-id');
+      await alice.processKeyExchangeAck(relayedAckAC);
 
       // Both sessions should be established
       expect(alice.isSessionEstablished('bob-peer-id'), isTrue);
@@ -186,9 +226,10 @@ void main() {
     test('session lifecycle: create, use, clear', () async {
       // Create session
       final keyExchangeMsg = await alice.createKeyExchangeMessage('bob-peer-id');
-      final relayedMsg = KeyExchangeMessage.fromJson(keyExchangeMsg.toJson());
+      final relayedMsg = _serverRelayKeyExchange(keyExchangeMsg, 'alice-peer-id');
       final ackMsg = await bob.processKeyExchangeMessage(relayedMsg);
-      await alice.processKeyExchangeAck(ackMsg, keyExchangeMsg.exchangePublicKey);
+      final relayedAck = _serverRelayAck(ackMsg, 'bob-peer-id');
+      await alice.processKeyExchangeAck(relayedAck);
 
       expect(alice.isSessionEstablished('bob-peer-id'), isTrue);
 
