@@ -57,7 +57,7 @@ class SecurityHandshake {
   Future<KeyExchangeAckMessage> processKeyExchangeMessage(KeyExchangeMessage message);
 
   /// Process key exchange acknowledgment
-  Future<void> processKeyExchangeAck(KeyExchangeAckMessage ack, String peerExchangePublicKey);
+  Future<void> processKeyExchangeAck(KeyExchangeAckMessage ack);
 
   /// Encrypt/decrypt per peer
   Future<Uint8List> encryptForPeer(Uint8List plaintext, String peerId);
@@ -122,7 +122,7 @@ class SecurityHandshake {
   initialize(): Promise<void>;
   initiateKeyExchange(targetPeerId: string): void;
   processKeyExchange(msg: { peer_id: string; signing_public_key: string; exchange_public_key: string }): Promise<void>;
-  processKeyExchangeAck(msg: { peer_id: string; status: string }): Promise<void>;
+  processKeyExchangeAck(msg: { peer_id: string; status: string; signing_public_key?: string; exchange_public_key?: string }): Promise<void>;
   encryptForPeer(plaintext: Buffer, peerId: string): Buffer;
   decryptFromPeer(ciphertext: Buffer, peerId: string): Buffer;
   isSessionEstablished(peerId: string): boolean;
@@ -219,7 +219,7 @@ func Verify(message, signature []byte, publicKey ed25519.PublicKey) bool
 | `answer` | `room_id`, `peer_id`, `sdp` | Send WebRTC answer |
 | `ice-candidate` | `room_id`, `peer_id`, `candidate` | Send ICE candidate |
 | `key-exchange` | `peer_id`, `signing_public_key`, `exchange_public_key` | Initiate E2EE handshake |
-| `key-exchange-ack` | `peer_id`, `status` | Acknowledge key exchange |
+| `key-exchange-ack` | `peer_id`, `status`, `signing_public_key`, `exchange_public_key` | Acknowledge key exchange with responder's public keys |
 | `ping` | — | Keep-alive |
 
 ### Server → Client
@@ -231,7 +231,7 @@ func Verify(message, signature []byte, publicKey ed25519.PublicKey) bool
 | `ready` | `peer_id` | New peer in room |
 | `offer`/`answer`/`ice-candidate` | `peer_id`, content | Relayed from peer |
 | `key-exchange` | `peer_id`, `signing_public_key`, `exchange_public_key` | Relay from peer |
-| `key-exchange-ack` | `peer_id`, `status` | Relay from peer |
+| `key-exchange-ack` | `peer_id`, `status`, `signing_public_key`, `exchange_public_key` | Relay from peer |
 | `pong` | — | Pong response |
 | `error` | `error` | Error message |
 | `disconnect` | `peer_id`, `room_id` | Peer disconnected |

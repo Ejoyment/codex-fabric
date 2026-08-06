@@ -3,6 +3,18 @@ import 'dart:typed_data';
 import 'package:test/test.dart';
 import 'package:codex_fabric/src/crypto/key_manager.dart';
 
+/// Convert a hex string to bytes.
+Uint8List _hexToBytes(String hex) {
+  if (hex.length.isOdd) {
+    hex = '0$hex';
+  }
+  final bytes = Uint8List(hex.length ~/ 2);
+  for (int i = 0; i < bytes.length; i++) {
+    bytes[i] = int.parse(hex.substring(i * 2, i * 2 + 2), radix: 16);
+  }
+  return bytes;
+}
+
 void main() {
   group('KeyManager', () {
     late KeyManager keyManager;
@@ -58,6 +70,16 @@ void main() {
         final originalSessionId = keyManager.sessionId;
         await keyManager.initialize(); // Should be a no-op
         expect(keyManager.sessionId, equals(originalSessionId));
+      });
+
+      test('should have signing keys consistent with each other', () {
+        // Ed25519 private key (64 bytes) is seed (32 bytes) || public key (32 bytes)
+        final privateKeyBytes = _hexToBytes(keyManager.signingPrivateKey);
+        final publicKeyBytes = _hexToBytes(keyManager.signingPublicKey);
+
+        expect(privateKeyBytes.length, equals(64));
+        expect(publicKeyBytes.length, equals(32));
+        expect(privateKeyBytes.sublist(32), equals(publicKeyBytes));
       });
     });
 
@@ -281,8 +303,7 @@ void main() {
           keyManager.exchangePublicKey, // Wrong key type
         );
 
-        // In the simplified implementation, this may pass since verify is a stub
-        // In production with real Ed25519, this should return false
+        expect(isValid, isFalse);
       });
     });
 
