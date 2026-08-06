@@ -43,11 +43,19 @@ webrtc:
   enable_data_channel: true
 
 auth:
+  # When enabled, all WebSocket connections to /ws must present a valid JWT.
+  # Clients send it as an "Authorization: Bearer <token>" header, or as a
+  # "?token=<token>" query parameter for browsers that cannot set headers.
+  # Unauthenticated connections are rejected with HTTP 401 before the
+  # WebSocket handshake. /health, /ready and /metrics stay public.
+  # NOTE: the Flutter and JS SDKs do not send tokens yet, so keep this
+  # disabled while developing against them.
   enabled: false
   jwt_secret: "change-this-to-a-secure-random-secret-min-32-chars"
   jwt_expiration: "24h"
   api_key_header: "X-API-Key"
   allow_insecure: true
+  # Optional: only admit tokens carrying any of these roles (403 otherwise).
   required_roles: []
   max_token_age: "1h"
 

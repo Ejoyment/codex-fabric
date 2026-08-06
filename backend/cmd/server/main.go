@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Ejoyment/codex-fabric/backend/internal/auth"
 	"github.com/Ejoyment/codex-fabric/backend/internal/config"
 	"github.com/Ejoyment/codex-fabric/backend/internal/signaling"
 	"github.com/Ejoyment/codex-fabric/backend/internal/webrtc"
@@ -68,15 +69,21 @@ func main() {
 	}
 	defer webrtcManager.Close()
 
+	// Initialize auth validator
+	authValidator := auth.NewValidator(cfg.Auth)
+
 	// Initialize signaling server
-	sigServer, err := signaling.NewServer(cfg.Signaling, webrtcManager, logger)
+	sigServer, err := signaling.NewServer(cfg.Signaling, webrtcManager, authValidator, logger)
 	if err != nil {
 		logger.Fatal("Failed to initialize signaling server", zap.Error(err))
 	}
 
 	// Setup HTTP routes
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ws", sigServer.HandleWebSocket)
+	// WebSocket endpoint is protected by the auth middleware. When
+	// auth.enabled is false the middleware passes requests through
+	// unchanged, preserving the unauthenticated development behavior.
+	mux.Handle("/ws", authValidator.HTTPMiddleware(http.HandlerFunc(sigServer.HandleWebSocket)))
 	mux.HandleFunc("/health", handleHealth)
 	mux.HandleFunc("/ready", handleReady)
 	mux.Handle("/metrics", promhttp.Handler())
