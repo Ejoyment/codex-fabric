@@ -4,9 +4,28 @@
  * Client-side key generation and E2EE operations.
  * All keys are generated and stored exclusively on the client device.
  * Private keys NEVER leave the client.
+ * 
+ * Uses Node.js's built-in crypto module for all primitives:
+ * - Ed25519 for signing and verification
+ * - X25519 for ECDH key agreement
+ * - AES-256-GCM for authenticated encryption
+ * - HKDF-SHA256 for session key derivation
  */
 
-import { randomBytes, createHash, createHmac } from 'crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  createPrivateKey,
+  createPublicKey,
+  diffieHellman,
+  generateKeyPairSync,
+  hkdfSync,
+  randomBytes,
+  randomUUID,
+  sign,
+  verify,
+  type JsonWebKey as NodeJsonWebKey,
+} from 'crypto';
 
 export interface KeyPair {
   publicKey: string;  // hex encoded
@@ -18,11 +37,29 @@ export interface SessionKeys {
   signingKey: Buffer;
 }
 
+type OkpCurve = 'Ed25519' | 'X25519';
+
+/** Build an OKP JWK containing a private key. */
+function privateJwk(crv: OkpCurve, privateBytes: Buffer, publicBytes: Buffer): NodeJsonWebKey {
+  return {
+    kty: 'OKP',
+    crv,
+    d: privateBytes.toString('base64url'),
+    x: publicBytes.toString('base64url'),
+  };
+}
+
+/** Build an OKP JWK containing only a public key. */
+function publicJwk(crv: OkpCurve, publicBytes: Buffer): NodeJsonWebKey {
+  return {
+    kty: 'OKP',
+    crv,
+    x: publicBytes.toString('base64url'),
+  };
+}
+
 /**
  * Manages cryptographic keys for end-to-end encryption.
- * 
- * Uses Web Crypto API when available (browser/React Native),
- * falls back to Node.js crypto module.
  */
 export class KeyManager {
   private _sessionId: string = '';
@@ -43,9 +80,9 @@ export class KeyManager {
   async initialize(): Promise<void> {
     if (this._initialized) return;
 
-    this._sessionId = this._generateUUID();
-    this._signingKeyPair = this._generateEd25519KeyPair();
-    this._exchangeKeyPair = this._generateX25519KeyPair();
+    this._sessionId = randomUUID();
+    this._signingKeyPair = this._generateKeyPair('ed25519');
+    this._exchangeKeyPair = this._generateKeyPair('x25519');
     this._initialized = true;
   }
 
@@ -56,51 +93,62 @@ export class KeyManager {
     if (!this._initialized) throw new Error('KeyManager not initialized');
     if (!this._exchangeKeyPair) throw new Error('Exchange key pair not found');
 
-    const sharedSecret = this._ecdh(
-      Buffer.from(this._exchangeKeyPair.privateKey, 'hex'),
-      Buffer.from(peerExchangePublicKey, 'hex'),
-    );
+    const sharedSecret = this._ecdh(this._exchangeKeyPair, peerExchangePublicKey);
 
-    const keys = this._deriveKeys(sharedSecret, peerExchangePublicKey);
+    const keys = this._deriveKeys(sharedSecret, this._exchangeKeyPair.publicKey, peerExchangePublicKey);
     this._sessionKeys.set(peerExchangePublicKey, keys);
     return keys;
   }
 
   /**
-   * Encrypt data for a specific peer.
+   * Encrypt data for a specific peer using AES-256-GCM.
    * Returns: [nonce (12 bytes) || ciphertext || auth tag (16 bytes)]
    */
   encrypt(plaintext: Buffer, peerExchangePublicKey: string): Buffer {
     const keys = this._sessionKeys.get(peerExchangePublicKey);
     if (!keys) throw new Error('No session keys for peer. Perform key exchange first.');
 
-    const nonce = randomBytes(12);
-    // Simplified XOR encryption for demo. In production, use AES-256-GCM via Web Crypto API.
-    const encrypted = Buffer.alloc(plaintext.length);
-    for (let i = 0; i < plaintext.length; i++) {
-      encrypted[i] = plaintext[i] ^ keys.encryptionKey[i % keys.encryptionKey.length] ^ nonce[i % nonce.length];
-    }
-    const authTag = randomBytes(16);
-    return Buffer.concat([nonce, encrypted, authTag]);
+    return this._aesGcmEncrypt(plaintext, keys.encryptionKey);
   }
 
   /**
-   * Decrypt data from a specific peer.
+   * Decrypt data from a specific peer using AES-256-GCM.
+   * Expects: [nonce (12 bytes) || ciphertext || auth tag (16 bytes)]
    */
   decrypt(ciphertext: Buffer, peerExchangePublicKey: string): Buffer {
     const keys = this._sessionKeys.get(peerExchangePublicKey);
     if (!keys) throw new Error('No session keys for peer. Perform key exchange first.');
 
-    if (ciphertext.length < 40) throw new Error('Ciphertext too short');
+    return this._aesGcmDecrypt(ciphertext, keys.encryptionKey);
+  }
 
-    const nonce = ciphertext.subarray(0, 12);
-    const encrypted = ciphertext.subarray(12, ciphertext.length - 16);
+  /**
+   * Sign a message using the local Ed25519 signing key.
+   * Returns a 64-byte signature.
+   */
+  async sign(message: Buffer): Promise<Buffer> {
+    if (!this._signingKeyPair) throw new Error('KeyManager not initialized');
 
-    const decrypted = Buffer.alloc(encrypted.length);
-    for (let i = 0; i < encrypted.length; i++) {
-      decrypted[i] = encrypted[i] ^ keys.encryptionKey[i % keys.encryptionKey.length] ^ nonce[i % nonce.length];
-    }
-    return decrypted;
+    const key = createPrivateKey({
+      key: privateJwk(
+        'Ed25519',
+        Buffer.from(this._signingKeyPair.privateKey, 'hex'),
+        Buffer.from(this._signingKeyPair.publicKey, 'hex'),
+      ),
+      format: 'jwk',
+    });
+    return sign(null, message, key);
+  }
+
+  /**
+   * Verify a signature against a message and the signer's public key.
+   */
+  async verify(message: Buffer, signature: Buffer, signerPublicKey: string): Promise<boolean> {
+    const key = createPublicKey({
+      key: publicJwk('Ed25519', Buffer.from(signerPublicKey, 'hex')),
+      format: 'jwk',
+    });
+    return verify(null, message, key, signature);
   }
 
   /**
@@ -124,53 +172,78 @@ export class KeyManager {
 
   // ==================== Internal Operations ====================
 
-  private _generateEd25519KeyPair(): KeyPair {
-    // Production: use @noble/ed25519 or Web Crypto API
-    const privateKey = randomBytes(32);
-    const publicKey = randomBytes(32);
+  private _generateKeyPair(kind: 'ed25519' | 'x25519'): KeyPair {
+    const { privateKey } =
+      kind === 'ed25519'
+        ? generateKeyPairSync('ed25519')
+        : generateKeyPairSync('x25519');
+    const jwk = privateKey.export({ format: 'jwk' });
+    const privateBytes = Buffer.from(jwk.d!, 'base64url');
+    const publicBytes = Buffer.from(jwk.x!, 'base64url');
+
     return {
-      publicKey: publicKey.toString('hex'),
-      privateKey: privateKey.toString('hex'),
+      publicKey: publicBytes.toString('hex'),
+      privateKey: privateBytes.toString('hex'),
     };
   }
 
-  private _generateX25519KeyPair(): KeyPair {
-    // Production: use @noble/curve or Web Crypto API
-    const privateKey = randomBytes(32);
-    const publicKey = randomBytes(32);
-    return {
-      publicKey: publicKey.toString('hex'),
-      privateKey: privateKey.toString('hex'),
-    };
-  }
-
-  private _ecdh(privateKey: Buffer, peerPublicKey: Buffer): Buffer {
-    // Production: use X25519 ECDH from @noble/curve
-    const shared = Buffer.alloc(32);
-    for (let i = 0; i < 32; i++) {
-      shared[i] = (privateKey[i] ?? 0) ^ (peerPublicKey[i] ?? 0);
-    }
-    return shared;
-  }
-
-  private _deriveKeys(sharedSecret: Buffer, peerPublicKey: string): SessionKeys {
-    const salt = Buffer.from('codex-fabric-v1');
-    const info = Buffer.from(`session-keys:${peerPublicKey}`);
-
-    // Simplified HKDF-like derivation
-    const prk = createHmac('sha256', salt).update(sharedSecret).digest();
-
-    const encKey = createHmac('sha256', prk).update(Buffer.concat([info, Buffer.from([0x01])])).digest();
-    const signKey = createHmac('sha256', prk).update(Buffer.concat([info, Buffer.from([0x02])])).digest();
-
-    return { encryptionKey: encKey, signingKey: signKey };
-  }
-
-  private _generateUUID(): string {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
+  private _ecdh(local: KeyPair, peerExchangePublicKey: string): Buffer {
+    const privateKey = createPrivateKey({
+      key: privateJwk(
+        'X25519',
+        Buffer.from(local.privateKey, 'hex'),
+        Buffer.from(local.publicKey, 'hex'),
+      ),
+      format: 'jwk',
     });
+    const peerPublicKey = createPublicKey({
+      key: publicJwk('X25519', Buffer.from(peerExchangePublicKey, 'hex')),
+      format: 'jwk',
+    });
+
+    return diffieHellman({ privateKey, publicKey: peerPublicKey });
+  }
+
+  private _deriveKeys(
+    sharedSecret: Buffer,
+    ourExchangePublicKey: string,
+    peerExchangePublicKey: string,
+  ): SessionKeys {
+    const salt = Buffer.from('codex-fabric-v1');
+
+    // Canonical ordering so both peers compute the same info string.
+    const [a, b] = [ourExchangePublicKey, peerExchangePublicKey].sort();
+    const info = Buffer.from(`session-keys:${a}:${b}`);
+
+    const okm = Buffer.from(hkdfSync('sha256', sharedSecret, salt, info, 64));
+    return {
+      encryptionKey: okm.subarray(0, 32),
+      signingKey: okm.subarray(32, 64),
+    };
+  }
+
+  private _aesGcmEncrypt(plaintext: Buffer, key: Buffer): Buffer {
+    if (key.length !== 32) throw new Error('Key must be 32 bytes for AES-256');
+
+    const nonce = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', key, nonce);
+    const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+
+    return Buffer.concat([nonce, encrypted, authTag]);
+  }
+
+  private _aesGcmDecrypt(ciphertext: Buffer, key: Buffer): Buffer {
+    if (key.length !== 32) throw new Error('Key must be 32 bytes for AES-256');
+    // Minimum is 12-byte nonce + 16-byte auth tag
+    if (ciphertext.length < 28) throw new Error('Ciphertext too short');
+
+    const nonce = ciphertext.subarray(0, 12);
+    const authTag = ciphertext.subarray(ciphertext.length - 16);
+    const encrypted = ciphertext.subarray(12, ciphertext.length - 16);
+
+    const decipher = createDecipheriv('aes-256-gcm', key, nonce);
+    decipher.setAuthTag(authTag);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
   }
 }
