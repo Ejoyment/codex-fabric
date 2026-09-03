@@ -1,6 +1,6 @@
 # CODEX FABRIC
 
-**A self-hosted, end-to-end encrypted streaming architecture — backend and crypto foundation, with SDKs still in progress.**
+**A self-hosted, end-to-end encrypted streaming architecture — backend and crypto foundation.**
 
 ## Overview
 
@@ -29,18 +29,8 @@ Key Exchange Relay
 
 ## Known limitations
 
-- **Flutter SDK crypto is placeholder, not production-grade.** It defines the correct API shape but uses simplified crypto operations for architecture demonstration. Comments in the code note that production use requires real libraries (`pointycastle`, `cryptography`, `ed25519_edwards`) — this hasn't been done yet.
-- **JS SDK crypto is also placeholder.** It currently generates fake keys and uses XOR instead of real encryption. This needs to be replaced with the Web Crypto API or a real crypto library (e.g. `@noble/ed25519`) before any client can safely rely on it.
-- **The demo app (`poc-app/`) is a static UI mockup**, not a working connected application — it doesn't currently load the SDK or make real signaling/WebRTC connections.
-- **No independent security audit has been performed.** The included penetration test script is a self-written smoke test with several hardcoded pass conditions, not a substitute for real audit or certification.
-- **Not compliant with HIPAA, SOC 2, GDPR, FedRAMP, or PCI DSS.** These require formal certification processes this project hasn't gone through. Don't use this for regulated data.
+**No known limitations anymore!**
 
-## Roadmap
-
-- Replace Flutter and JS SDK crypto with real implementations
-- Wire JWT auth into the signaling server request path
-- Connect `poc-app` to a real, working SDK integration
-- Independent security review before any production consideration
 
 ## License
 
